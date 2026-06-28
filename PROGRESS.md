@@ -21,14 +21,14 @@
 
 | Day | Title | Theory | Deliverable | Status |
 |---|---|---|---|---|
-| 7 | Non-determinism | — | Deterministic training script | ☐ |
-| 8 | DVC + MinIO | — | DVC pipeline tracking data | ☐ |
-| 9 | DVC Pipelines | — | `dvc.yaml` DAG | ☐ |
-| 10 | MLflow Tracking | — | Experiment runs logged | ☐ |
-| 11 | MLflow Registry | — | Model versions + aliases | ☐ |
-| 12 | Optuna Sweeps | — | HPO run with leaderboard | ☐ |
-| 13 | Lineage | — | OpenLineage integration | ☐ |
-| 14 | Consolidation | — | Reproducibility gate dry-run | ☐ |
+| 7 | Non-determinism | [day07_nondeterminism.md](docs/phase1/day07_nondeterminism.md) | `training/train.py` — seeds fixed, deterministic | ✅ |
+| 8 | DVC + MinIO | [day08_dvc_minio.md](docs/phase1/day08_dvc_minio.md) | DVC config + MinIO remote + threat checkpoint | ✅ |
+| 9 | DVC Pipelines | [day09_dvc_pipelines.md](docs/phase1/day09_dvc_pipelines.md) | `dvc.yaml` DAG — ingest→featurize→train | ✅ |
+| 10 | MLflow Tracking | [day10_mlflow_tracking.md](docs/phase1/day10_mlflow_tracking.md) | `mlflow_train.py` — params+metrics+model+signature | ✅ |
+| 11 | MLflow Registry | [day11_mlflow_registry.md](docs/phase1/day11_mlflow_registry.md) | `registry.py` — aliases + compare + provenance | ✅ |
+| 12 | Optuna HPO | [day12_optuna_hpo.md](docs/phase1/day12_optuna_hpo.md) | `hpo.py` — 20 trials, nested MLflow runs | ✅ |
+| 13 | Lineage | [day13_lineage.md](docs/phase1/day13_lineage.md) | `pipelines/lineage.py` — OpenLineage emitter | ✅ |
+| 14 | Reproducibility Gate | [day14_reproducibility_gate.md](docs/phase1/day14_reproducibility_gate.md) | `verify_reproducibility.sh` — 6-step gate dry-run | ✅ |
 
 ---
 

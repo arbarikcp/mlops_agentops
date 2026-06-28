@@ -1,0 +1,8 @@
+# Files DVC should not track
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+.venv

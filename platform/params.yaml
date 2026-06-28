@@ -1,0 +1,46 @@
+# params.yaml — single source of truth for all pipeline parameters.
+# DVC tracks this file: changing any value here triggers the affected stages to rerun.
+# Code reads this via TrainingParams.from_yaml("params.yaml").
+
+data:
+  raw_path: data/raw/credit_card_default.csv
+  processed_path: data/processed/features.parquet
+  test_size: 0.2
+  random_seed: 42
+  target_col: DEFAULT_PAYMENT_NEXT_MONTH
+
+features:
+  target_col: DEFAULT_PAYMENT_NEXT_MONTH
+  id_col: ID
+  categorical_cols:
+    - SEX
+    - EDUCATION
+    - MARRIAGE
+  payment_status_cols:
+    - PAY_0
+    - PAY_2
+    - PAY_3
+    - PAY_4
+    - PAY_5
+    - PAY_6
+
+model:
+  algorithm: lightgbm
+  n_estimators: 300
+  learning_rate: 0.05
+  max_depth: 6
+  num_leaves: 31
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  random_state: 42
+  early_stopping_rounds: 30
+
+evaluation:
+  threshold: 0.5
+
+mlflow:
+  experiment_name: m1-credit-risk-training
+  run_name_prefix: lgbm
+  model_name: credit-risk-model
+  artifact_path: model

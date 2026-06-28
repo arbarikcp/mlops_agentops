@@ -1,0 +1,8 @@
+[core]
+    autostage = true
+[remote "minio"]
+    url = s3://dvc-data
+    endpointurl = http://localhost:9000
+[remote "minio-docker"]
+    url = s3://dvc-data
+    endpointurl = http://minio:9000

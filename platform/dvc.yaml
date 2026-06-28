@@ -1,0 +1,84 @@
+# DVC Pipeline — Day 9 deliverable.
+#
+# Stages form a DAG: ingest → featurize → train → evaluate
+#
+# Run the full pipeline:  dvc repro
+# Run one stage:          dvc repro train
+# Visualize DAG:          dvc dag
+# See what changed:       dvc status
+# Compare metrics:        dvc metrics diff
+
+stages:
+
+  ingest:
+    desc: "Download UCI Credit Card Default dataset"
+    cmd: python -m data.ingest --output data/raw/credit_card_default.csv
+    deps:
+      - data/ingest.py
+    outs:
+      - data/raw/credit_card_default.csv
+
+  featurize:
+    desc: "Clean and engineer features; output parquet for training"
+    cmd: >
+      PYTHONHASHSEED=${data.random_seed}
+      python -m training.features
+      --input data/raw/credit_card_default.csv
+      --output data/processed/features.parquet
+      --params params.yaml
+    deps:
+      - data/raw/credit_card_default.csv
+      - training/features.py
+      - training/config.py
+    params:
+      - params.yaml:
+          - features
+          - data.random_seed
+          - data.test_size
+          - data.target_col
+    outs:
+      - data/processed/features.parquet
+
+  train:
+    desc: "Train LightGBM model deterministically; save artifact + metrics"
+    cmd: >
+      PYTHONHASHSEED=${data.random_seed}
+      python -m training.train
+      --input data/processed/features.parquet
+      --params params.yaml
+    deps:
+      - data/processed/features.parquet
+      - training/train.py
+      - training/evaluate.py
+      - training/config.py
+    params:
+      - params.yaml:
+          - model
+          - evaluation
+          - data.test_size
+          - data.random_seed
+          - data.target_col
+    outs:
+      - models/credit_risk_model.pkl
+    metrics:
+      - metrics/train_metrics.json:
+          cache: false
+
+  mlflow_train:
+    desc: "Train with full MLflow tracking (Day 10+). Not in repro by default."
+    cmd: >
+      PYTHONHASHSEED=${data.random_seed}
+      python -m training.mlflow_train
+      --params params.yaml
+    deps:
+      - data/processed/features.parquet
+      - training/mlflow_train.py
+      - training/train.py
+      - training/evaluate.py
+      - training/config.py
+    params:
+      - params.yaml:
+    outs:
+      - metrics/mlflow_run_id.txt:
+          cache: false
+    always_changed: false
