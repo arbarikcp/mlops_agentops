@@ -8,6 +8,7 @@ SEED = 42
         install dvc-init data-download featurize train \
         mlflow-train hpo test test-unit test-data \
         determinism-check reproduce-check \
+        calibrate threshold-analysis decision-band slice-eval \
         kind-up kind-down
 
 help:
@@ -41,6 +42,12 @@ help:
 	@echo ""
 	@echo "  Gate:"
 	@echo "    make reproduce-check  Reproducibility gate dry-run (Day 14)"
+	@echo ""
+	@echo "  Phase 2 — Calibration & Threshold (Days 15-18):"
+	@echo "    make calibrate         Fit + compare calibrator on test set"
+	@echo "    make threshold-analysis Find cost-optimal threshold"
+	@echo "    make decision-band     Derive approve/review/decline band"
+	@echo "    make slice-eval        Slice-level AUC + OOD detection"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -168,6 +175,91 @@ reproduce-check:
 		exit 1; \
 	fi; \
 	bash scripts/verify_reproducibility.sh "$$RUN_ID"
+
+# ── Phase 2 — Calibration & Threshold ────────────────────────────────────────
+
+calibrate:
+	@echo "→ Fitting calibrator + comparing ECE before/after (Day 15)..."
+	uv run python -c "
+import pickle, pandas as pd, numpy as np
+from training.calibration import fit_calibrator, calibration_report, reliability_data
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X = df.drop(columns=[target, 'ID']); y = df[target]
+X_cal, y_cal = X.iloc[int(n*0.6):int(n*0.8)].to_numpy(), y.iloc[int(n*0.6):int(n*0.8)].to_numpy()
+X_test, y_test = X.iloc[int(n*0.8):].to_numpy(), y.iloc[int(n*0.8):].to_numpy()
+cal = fit_calibrator(model, X_cal, y_cal)
+report = calibration_report(model, cal, X_test, y_test)
+report.log_summary()
+print(f'ECE before: {report.ece_before:.4f}  after: {report.ece_after:.4f}  improved={report.improved}')
+rel = reliability_data(y_test, cal.predict_proba(X_test)[:,1])
+rel.to_csv('metrics/reliability_diagram.csv', index=False)
+print('Reliability diagram saved to metrics/reliability_diagram.csv')
+"
+
+threshold-analysis:
+	@echo "→ Finding cost-optimal threshold (Day 16)..."
+	uv run python -c "
+import pickle, pandas as pd, numpy as np
+from training.threshold import find_cost_optimal_threshold, threshold_sweep
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test)[:,1]
+result = find_cost_optimal_threshold(y_test, y_prob)
+result.log_summary()
+sweep = threshold_sweep(y_test, y_prob)
+sweep.to_csv('metrics/threshold_sweep.csv', index=False)
+print('Threshold sweep saved to metrics/threshold_sweep.csv')
+"
+
+decision-band:
+	@echo "→ Deriving approve/review/decline band + routing stats (Day 17)..."
+	uv run python -c "
+import pickle, pandas as pd, numpy as np
+from training.decision import ThresholdBand, find_review_band, calibrate_band_for_cost
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test)[:,1]
+band = calibrate_band_for_cost(y_test, y_prob, target_review_pct=0.15)
+print(f'Band: approve < {band.approve}  decline >= {band.decline}')
+print(band.routing_stats(y_prob))
+review_df = find_review_band(y_test, y_prob, band.approve, band.decline)
+print(review_df.to_string())
+"
+
+slice-eval:
+	@echo "→ Slice-level evaluation + OOD detection (Day 18)..."
+	uv run python -c "
+import pickle, pandas as pd, numpy as np
+from training.slice_eval import evaluate_slices, worst_slices, slice_gap_report, fit_ood_detector, ood_report
+from training.evaluate import compute_metrics
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_train_np = df.drop(columns=[target, 'ID']).iloc[:int(n*0.8)].to_numpy()
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):]
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test.to_numpy())[:,1]
+overall = compute_metrics(y_test, y_prob)
+print(f'Overall AUC: {overall[\"roc_auc\"]:.4f}')
+slices = evaluate_slices(X_test, y_test, y_prob)
+slices.to_csv('metrics/slice_metrics.csv', index=False)
+print(slices.to_string())
+gaps = slice_gap_report(slices, overall, warn_threshold=0.05)
+flagged = gaps[gaps['flag']]
+print(f'\nFlagged slices (gap > 0.05): {len(flagged)}')
+if len(flagged): print(flagged[['slice_col','slice_val','roc_auc','gap']].to_string())
+detector = fit_ood_detector(X_train_np)
+report = ood_report(detector, X_test.to_numpy())
+print(f'\nOOD fraction (test set): {report[\"ood_fraction\"]:.4f}')
+"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 

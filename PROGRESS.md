@@ -185,13 +185,102 @@ LOG_LEVEL=DEBUG python -m training.train    # verbose training output
 ---
 
 ## Phase 2 — Calibration & Thresholds (Days 15–18)
+**Tag:** `phase2`
+
+### Day Table
 
 | Day | Title | Theory | Deliverable | Status |
 |---|---|---|---|---|
-| 15 | Calibration | — | Reliability diagram | ☐ |
-| 16 | Threshold Tuning | — | Cost-sensitive threshold | ☐ |
-| 17 | Confidence & Abstain | — | Reject/abstain pipeline | ☐ |
-| 18 | Slice Performance | — | Slice-level eval + OOD | ☐ |
+| 15 | Calibration | [day15_calibration.md](docs/phase2/day15_calibration.md) | `training/calibration.py` — isotonic/sigmoid calibrator, reliability data | ✅ |
+| 16 | Threshold Tuning | [day16_threshold_tuning.md](docs/phase2/day16_threshold_tuning.md) | `training/threshold.py` — cost-optimal threshold + sweep | ✅ |
+| 17 | Confidence & Abstain | [day17_confidence_abstain.md](docs/phase2/day17_confidence_abstain.md) | `training/decision.py` — `ThresholdBand`, 3-class routing | ✅ |
+| 18 | Slice Performance | [day18_slice_performance.md](docs/phase2/day18_slice_performance.md) | `training/slice_eval.py` — slice AUC + OOD detection | ✅ |
+
+### What's in This Phase
+
+**Theory docs** (`docs/phase2/`):
+
+| File | Content |
+|---|---|
+| [day15_calibration.md](docs/phase2/day15_calibration.md) | Calibration problem, reliability diagrams, Platt vs isotonic, ECE/Brier, sklearn compatibility note |
+| [day16_threshold_tuning.md](docs/phase2/day16_threshold_tuning.md) | Cost-sensitive threshold, $C_{FP}/(C_{FP}+C_{FN})$ heuristic, cost curve, calibration→threshold order |
+| [day17_confidence_abstain.md](docs/phase2/day17_confidence_abstain.md) | 3-class routing economics, band width strategy, human-in-the-loop band, serving integration |
+| [day18_slice_performance.md](docs/phase2/day18_slice_performance.md) | Simpson's paradox, protected attributes, fairness criteria (incompatible), OOD via Isolation Forest |
+
+**Code** (`platform/training/`):
+
+| File | What it does |
+|---|---|
+| `training/calibration.py` | `fit_calibrator` (isotonic or sigmoid on held-out set), `CalibrationReport`, `reliability_data` — sklearn 1.4+ compatible |
+| `training/threshold.py` | `find_cost_optimal_threshold` (sweeps 200 points, minimises FP×$2K + FN×$8K), `threshold_sweep` DataFrame |
+| `training/decision.py` | `ThresholdBand` (frozen dataclass, vectorised routing), `find_review_band`, `calibrate_band_for_cost` |
+| `training/slice_eval.py` | `evaluate_slices` (per-slice AUC/AP/ECE), `worst_slices`, `slice_gap_report`, `fit_ood_detector`, `ood_report` |
+
+**Tests** (`platform/tests/unit/`):
+
+| File | Tests |
+|---|---|
+| `tests/unit/test_calibration.py` | 12 tests — fit calibrator both methods, probs in [0,1], report fields, ECE range, reliable gap |
+| `tests/unit/test_threshold.py` | 12 tests — result type, threshold range, cost matches manual, confusion sums to N, FN-heavy shifts threshold down |
+| `tests/unit/test_decision.py` | 15 tests — approve/review/decline routing, invalid band raises, batch vectorised, stats sum to 1, approve default rate < decline |
+| `tests/unit/test_slice_eval.py` | 20 tests — expected columns, metrics in range, skips tiny/missing slices, OOD fraction in range, OOD scores lower for shifted dist |
+
+### Quick Start (from `git checkout phase2`)
+
+**Prerequisites:** Phase 1 complete — model trained and in `models/credit_risk_model.pkl`, processed data in `data/processed/features.parquet`.
+
+```bash
+cd platform
+
+# 1. Start infrastructure and install deps:
+cp .env.example .env && make up && make install
+
+# 2. Ensure a trained model exists:
+make train            # or: make mlflow-train
+
+# 3. Calibration (Day 15):
+make calibrate        # ECE before/after, saves metrics/reliability_diagram.csv
+
+# 4. Cost-optimal threshold (Day 16):
+make threshold-analysis  # finds t* that minimises FP×$2K + FN×$8K
+
+# 5. Decision band (Day 17):
+make decision-band    # approve/review/decline routing stats
+
+# 6. Slice evaluation + OOD (Day 18):
+make slice-eval       # per-slice AUC for EDUCATION, SEX, MARRIAGE + OOD fraction
+
+# 7. Run all Phase 2 tests:
+make test             # all 59 unit tests (includes Phase 1 tests)
+uv run pytest tests/unit/test_calibration.py tests/unit/test_threshold.py \
+    tests/unit/test_decision.py tests/unit/test_slice_eval.py -v  # phase 2 only
+```
+
+**Key outputs after running:**
+
+| File | Contents |
+|---|---|
+| `metrics/reliability_diagram.csv` | Calibration curve bins (mean_predicted, fraction_positive, gap) |
+| `metrics/threshold_sweep.csv` | Full cost curve across 200 thresholds |
+| `metrics/slice_metrics.csv` | Per-slice AUC, AP, ECE for all demographic groups |
+
+**Debugging:**
+```bash
+# Calibration not improving?
+# → Check calibration set size (need >= 1000 for isotonic; use sigmoid for smaller sets)
+
+# Optimal threshold too low (< 0.10)?
+# → Verify FN/FP costs in threshold.py DEFAULT_FN_COST / DEFAULT_FP_COST
+# → Check class balance in the dataset
+
+# Slice gap too large for a protected group?
+# → Investigate training data representation for that group
+# → Do NOT promote model to champion until investigated
+
+# OOD fraction high on test set?
+# → Feature pipeline may have changed between training and test
+# → Check for data leakage or temporal shift
+```
 
 ---
 
