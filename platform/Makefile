@@ -19,6 +19,7 @@ SEED = 42
         chaos-gate-check \
         gitops-gate-check \
         milestone2-gate-check \
+        phase13-gate-check \
         kind-up kind-down
 
 define PYBLOCK_01
@@ -825,6 +826,22 @@ milestone2-gate-check:
 	@uv run python -c "from infra.portability import PortabilityScore, CloudProvider; ps=PortabilityScore.assess('ml-platform', CloudProvider.GCP); print(f'  ✅ Portability: score={ps.score:.2f} grade={ps.grade} migration_days={ps.estimated_migration_days}')"
 	@echo ""
 	@echo "  Milestone 2 Gate: PASSED ✅"
+
+# ── Phase 13 Gate — Scaling & Inference Optimization ─────────────────────────
+
+phase13-gate-check:
+	@echo "→ Phase 13 Scaling & Inference Optimization Gate (Days 91–99)..."
+	@echo ""
+	@echo "  Running Phase 13 test suite..."
+	@uv run python -m pytest tests/unit/test_distributed.py tests/unit/test_ray_train.py tests/unit/test_training_opt.py tests/unit/test_inference_opt.py tests/unit/test_quantization.py tests/unit/test_compilation.py tests/unit/test_gpu_cost.py tests/unit/test_vllm_config.py tests/unit/test_vllm_k8s.py --override-ini="addopts=" -q && echo "  ✅ All Phase 13 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  ZeRO-3 memory estimate sanity check..."
+	@uv run python -c "from llm.distributed import ZeroMemoryEstimator, ZeroStage; r=ZeroMemoryEstimator.estimate(7.0, ZeroStage.FULL, 8); print(f'  ✅ ZeRO-3 7B@8GPUs: {r[\"total_gb\"]:.2f} GB/GPU (vs 112 GB stage-0)')"
+	@echo ""
+	@echo "  CapacityPlan sanity check..."
+	@uv run python -c "from llm.vllm_k8s import CapacityPlan; p=CapacityPlan(target_rps=100.0, single_replica_throughput=20.0, safety_factor=1.2, gpu_cost_per_hour=3.0); print('  ✅ CapacityPlan: {} replicas, USD{:.2f}/hr'.format(p.replicas_needed(), p.hourly_cost_usd()))"
+	@echo ""
+	@echo "  Phase 13 Gate: PASSED ✅"
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 

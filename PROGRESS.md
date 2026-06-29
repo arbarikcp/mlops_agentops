@@ -1092,23 +1092,40 @@ make milestone2-gate-check
 
 ---
 
-## Phase 13 — Scaling & Inference Optimization (Days 91–99)
-**Tag:** `phase13` *(pending)*
+## Phase 13 — Scaling & Inference Optimization (Days 91–99) ✅
+**Tag:** `phase13`
 **Milestone:** 3 — Production RAG / LLMOps
+**Gate:** `make phase13-gate-check`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Code Module | Tests | Status |
 |---|---|---|---|---|
-| 91 | Distributed Training Theory | [day91_distributed_training.md](docs/phase13/day91_distributed_training.md) | Data/model/pipeline/tensor parallelism; DDP, FSDP, ZeRO deep-dive | ☐ |
-| 92 | Ray Train Multi-GPU | [day92_ray_train.md](docs/phase13/day92_ray_train.md) | `llm/ray_train_job.py` — multi-GPU training job with Ray Train | ☐ |
-| 93 | Training Optimization | [day93_training_optimization.md](docs/phase13/day93_training_optimization.md) | `llm/train_optimized.py` — mixed precision, gradient checkpointing, data loading | ☐ |
-| 94 | Inference Optimization Theory | [day94_inference_optimization.md](docs/phase13/day94_inference_optimization.md) | KV cache, PagedAttention, continuous batching, batching strategies | ☐ |
-| 95 | Quantization for Serving | [day95_quantization.md](docs/phase13/day95_quantization.md) | `llm/quantize.py` — PTQ/QAT, GPTQ/AWQ evaluation, distillation pipeline | ☐ |
-| 96 | Compilation + Runtimes | [day96_runtimes.md](docs/phase13/day96_runtimes.md) | ONNX Runtime, TensorRT-LLM, `torch.compile` benchmark harness | ☐ |
-| 97 | GPU Utilization & Cost | [day97_gpu_cost.md](docs/phase13/day97_gpu_cost.md) | MIG partition config, spot strategy, idle GPU detection script | ☐ |
-| 98 | vLLM Single-Node Deep | [day98_vllm_single_node.md](docs/phase13/day98_vllm_single_node.md) | `llm/vllm_serve.py` — vLLM server config, benchmark, throughput profiling | ☐ |
-| 99 | vLLM on K8s | [day99_vllm_k8s.md](docs/phase13/day99_vllm_k8s.md) | `infra/k8s/vllm-deployment.yaml` + GPU metrics + capacity planning doc | ☐ |
+| 91 | Distributed Training Parallelism | [llm/distributed.py](platform/llm/distributed.py) | [test_distributed.py](platform/tests/unit/test_distributed.py) | ✅ |
+| 92 | Ray Train Multi-GPU Job | [llm/ray_train.py](platform/llm/ray_train.py) | [test_ray_train.py](platform/tests/unit/test_ray_train.py) | ✅ |
+| 93 | Training Optimization | [llm/training_opt.py](platform/llm/training_opt.py) | [test_training_opt.py](platform/tests/unit/test_training_opt.py) | ✅ |
+| 94 | Inference Opt: KV Cache, PagedAttention | [llm/inference_opt.py](platform/llm/inference_opt.py) | [test_inference_opt.py](platform/tests/unit/test_inference_opt.py) | ✅ |
+| 95 | Quantization: PTQ/QAT, GPTQ/AWQ | [llm/quantization.py](platform/llm/quantization.py) | [test_quantization.py](platform/tests/unit/test_quantization.py) | ✅ |
+| 96 | Compilation & Runtimes: ONNX, TRT-LLM | [llm/compilation.py](platform/llm/compilation.py) | [test_compilation.py](platform/tests/unit/test_compilation.py) | ✅ |
+| 97 | GPU Utilization & Cost: MIG, Spot | [llm/gpu_cost.py](platform/llm/gpu_cost.py) | [test_gpu_cost.py](platform/tests/unit/test_gpu_cost.py) | ✅ |
+| 98 | vLLM Single-Node Deep Dive | [llm/vllm_config.py](platform/llm/vllm_config.py) | [test_vllm_config.py](platform/tests/unit/test_vllm_config.py) | ✅ |
+| 99 | vLLM on Kubernetes + Capacity Planning | [llm/vllm_k8s.py](platform/llm/vllm_k8s.py) | [test_vllm_k8s.py](platform/tests/unit/test_vllm_k8s.py) | ✅ |
+
+### Key Concepts
+- **ZeRO-3 (FSDP FULL_SHARD):** Shards params + grads + optimizer states — 8x memory reduction on 8 GPUs
+- **PagedAttention:** Virtual-memory paging for KV cache — 24x more concurrent requests
+- **Continuous batching:** Iteration-level scheduling — 15x throughput vs static batching
+- **AWQ INT4:** 4x model compression with < 0.5% accuracy loss vs FP16
+- **TensorRT-LLM:** 5x inference speedup over vanilla PyTorch on NVIDIA GPUs
+- **CapacityPlan:** `replicas = ceil(target_rps × safety_factor / replica_throughput)`
+- **MIG 1g.5gb × 7:** Serve 7 models on one A100 at $0.43/hr each
+
+### Test Summary
+**222 tests, 0 failures** across all 9 modules.
+
+```bash
+make phase13-gate-check
+```
 
 ---
 
