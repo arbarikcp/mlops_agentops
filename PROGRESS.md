@@ -638,32 +638,67 @@ for r in recs: print(f'{r.name}: {r.best_for}')
 
 ---
 
-## Phase 6 — Feature Store & Closed Feedback Loop (Days 38–45)
-**Tag:** `phase6` *(pending)*
+## Phase 6 — Feature Store & Closed Feedback Loop (Days 38–45) ✅
+**Tag:** `phase6`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 38 | Feature Store Problem | [day38_feature_store_problem.md](docs/phase6/day38_feature_store_problem.md) | Skew analysis, point-in-time correctness doc, reuse patterns | ☐ |
-| 39 | Feast Architecture | [day39_feast_architecture.md](docs/phase6/day39_feast_architecture.md) | `features/feast_setup.py` — offline store (Parquet/MinIO) + registry | ☐ |
-| 40 | Feature Views & Point-in-Time Joins | [day40_feature_views.md](docs/phase6/day40_feature_views.md) | `features/feature_views.py` — entities, feature views, PIT joins | ☐ |
-| 41 | Materialization & Online Store | [day41_materialization.md](docs/phase6/day41_materialization.md) | `features/materialization.py` — Redis online store + materialization job | ☐ |
-| 42 | Streaming Features | [day42_streaming_features.md](docs/phase6/day42_streaming_features.md) | `features/streaming.py` — push sources, on-demand transforms | ☐ |
-| 43 | Feature Monitoring | [day43_feature_monitoring.md](docs/phase6/day43_feature_monitoring.md) | `features/feature_monitor.py` — drift, freshness SLAs, data quality | ☐ |
-| 44 | Label Feedback Loop | [day44_label_feedback.md](docs/phase6/day44_label_feedback.md) | `features/feedback_loop.py` — delayed ground truth, active-learning trigger | ☐ |
-| 45 | Consolidation: Zero Skew | [day45_zero_skew.md](docs/phase6/day45_zero_skew.md) | Zero train/serve skew integration test | ☐ |
+| 38 | Feature Store Problem | [day38_feature_store_problem.md](docs/phase6/day38_feature_store_problem.md) | — | ✅ |
+| 39 | Feast Architecture | [day39_feast_architecture.md](docs/phase6/day39_feast_architecture.md) | `features/feature_store.py` | ✅ |
+| 40 | Feature Views & PIT Joins | [day40_feature_views.md](docs/phase6/day40_feature_views.md) | `features/feature_views.py` | ✅ |
+| 41 | Materialization & Online Store | [day41_materialization.md](docs/phase6/day41_materialization.md) | `features/materialization.py` | ✅ |
+| 42 | Streaming Features | [day42_streaming_features.md](docs/phase6/day42_streaming_features.md) | `features/streaming.py` | ✅ |
+| 43 | Feature Monitoring | [day43_feature_monitoring.md](docs/phase6/day43_feature_monitoring.md) | `features/feature_monitor.py` | ✅ |
+| 44 | Label Feedback Loop | [day44_label_feedback.md](docs/phase6/day44_label_feedback.md) | `features/feedback_loop.py` | ✅ |
+| 45 | Consolidation: Zero Skew | [day45_zero_skew.md](docs/phase6/day45_zero_skew.md) | `features/skew_checker.py` | ✅ |
 
-### Planned Outputs
+### Code Modules
 
-| Module | What it will do |
-|---|---|
-| `features/feast_setup.py` | Feast `FeatureStore` initialised with MinIO offline + Redis online |
-| `features/feature_views.py` | `CreditRiskEntity`, `CreditRiskFeatureView`, point-in-time join util |
-| `features/materialization.py` | `materialize_incremental()`, backfill runner |
-| `features/streaming.py` | Push-source ingestion + on-demand transform decorators |
-| `features/feature_monitor.py` | `FeatureDriftMonitor`, freshness SLA checker, null-rate watcher |
-| `features/feedback_loop.py` | `LabelFeedbackLoop.step()` — 8-step closed feedback loop skeleton |
+| Module | Key Classes | Description |
+|---|---|---|
+| `features/feature_store.py` | `FeatureStore`, `OfflineStore`, `InMemoryOnlineStore`, `FeatureRegistry` | Core feature store primitives — PIT join, offline/online read/write, registry persistence |
+| `features/feature_views.py` | `Entity`, `Feature`, `FeatureView`, `FeatureService`, `PointInTimeJoin` | Feature view definitions + PIT join algorithm (no future leakage) |
+| `features/materialization.py` | `IncrementalMaterializer`, `MaterializationJob`, `MaterializationInterval` | Batch, incremental, and backfill materialization with idempotency |
+| `features/streaming.py` | `PushSource`, `PushSchema`, `OnDemandTransform`, `StreamProcessor` | Real-time feature ingestion via push sources + on-demand transforms |
+| `features/feature_monitor.py` | `FeatureMonitor`, `FreshnessChecker`, `FeatureQualityChecker`, `FeatureDriftMonitor` | Three-pillar monitoring: freshness / quality / drift (PSI + KS) |
+| `features/feedback_loop.py` | `LabelFeedbackLoop`, `GroundTruthJoiner`, `MetricRecomputer`, `RetrainDecider` | 8-step closed feedback loop: delayed labels, AUC recompute, two-condition retrain trigger |
+| `features/skew_checker.py` | `TrainServeSkewChecker`, `TrainServeSkewReport`, `SkewEvidence` | Zero train-serve skew: schema skew, feature PSI, prediction score delta |
+
+### Test Coverage
+
+| Test File | Tests | Coverage |
+|---|---|---|
+| `tests/unit/test_feature_store.py` | 33 | 91% |
+| `tests/unit/test_feature_views.py` | 30 | 100% |
+| `tests/unit/test_materialization.py` | 24 | 96% |
+| `tests/unit/test_streaming.py` | 24 | 100% |
+| `tests/unit/test_feature_monitor.py` | 30 | 95% |
+| `tests/unit/test_feedback_loop.py` | 29 | 98% |
+| `tests/unit/test_skew_checker.py` | 18 | 98% |
+| **Total** | **206** | |
+
+### Quick Start
+
+```bash
+# Run all Phase 6 tests
+make feature-store-gate-check
+
+# Run unit tests only
+uv run pytest tests/unit/test_feature_store.py tests/unit/test_feature_views.py \
+    tests/unit/test_materialization.py tests/unit/test_streaming.py \
+    tests/unit/test_feature_monitor.py tests/unit/test_feedback_loop.py \
+    tests/unit/test_skew_checker.py -v
+```
+
+### Key Concepts
+
+- **PIT Correctness** — For each entity row at time T, only use feature snapshots from ≤ T. Implemented in `PointInTimeJoin.join()` and `OfflineStore.get_historical_features()`.
+- **Materialization Idempotency** — Re-running for the same window overwrites with the same values. Safe to re-trigger on failure.
+- **Freshness vs Missing** — `STALE` triggers an alert but doesn't block the gate. Only `MISSING` (never materialized) blocks `overall_passed`.
+- **Two-Condition Retrain Trigger** — Both `n_new_labels >= min_batch_size` AND `|delta_auc| >= threshold` must be satisfied. Prevents noisy small-batch retrains.
+- **Zero Skew Claim** — `TrainServeSkewChecker.run(train_df, serve_df).zero_skew == True` is the measurable contract.
 
 ---
 

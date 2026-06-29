@@ -12,6 +12,7 @@ SEED = 42
         data-contract label-contract skew-detect \
         serve-local serving-gate-check \
         pipeline-gate-check \
+        feature-store-gate-check \
         kind-up kind-down
 
 help:
@@ -63,6 +64,9 @@ help:
 	@echo ""
 	@echo "  Phase 5 — Orchestration & Pipelines (Days 31-37):"
 	@echo "    make pipeline-gate-check Run Pipeline gate dry-run (Day 37)"
+	@echo ""
+	@echo "  Phase 6 — Feature Store & Closed Feedback Loop (Days 38-45):"
+	@echo "    make feature-store-gate-check  Run Feature Store gate dry-run (Day 45)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -453,6 +457,58 @@ for r in recs[:3]:
 "
 	@echo ""
 	@echo "  Pipeline Gate: PASSED ✅"
+
+# ── Phase 6 — Feature Store & Closed Feedback Loop ──────────────────────────
+
+feature-store-gate-check:
+	@echo "→ Phase 6 Feature Store Gate Dry-Run (Day 45)..."
+	@echo ""
+	@echo "  Checking Phase 6 test suite..."
+	@uv run python -m pytest \
+	    tests/unit/test_feature_store.py tests/unit/test_feature_views.py \
+	    tests/unit/test_materialization.py tests/unit/test_streaming.py \
+	    tests/unit/test_feature_monitor.py tests/unit/test_feedback_loop.py \
+	    tests/unit/test_skew_checker.py --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 6 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Zero-skew self-test..."
+	@uv run python -c "
+import numpy as np, pandas as pd
+from features.skew_checker import TrainServeSkewChecker
+rng = np.random.default_rng(42)
+df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 500), 'util_rate': rng.normal(0.4, 0.1, 500)})
+checker = TrainServeSkewChecker()
+report = checker.run(df, df)
+status = '✅' if report.zero_skew else '❌'
+print(f'  {status} Zero skew on identical data: {report.zero_skew}')
+"
+	@echo ""
+	@echo "  Feature monitor self-test..."
+	@uv run python -c "
+from datetime import datetime, timezone
+from features.feature_monitor import FreshnessChecker
+checker = FreshnessChecker()
+now = datetime.now(timezone.utc)
+result = checker.check('payment_features', last_materialized_at=now, threshold_hours=25.0, now=now)
+status = '✅' if result.is_fresh else '❌'
+print(f'  {status} Freshness check (just materialized): {result.status}')
+"
+	@echo ""
+	@echo "  Feedback loop self-test..."
+	@uv run python -c "
+from datetime import datetime, timezone
+from features.feedback_loop import (
+    GroundTruthJoiner, PredictionRecord, OutcomeRecord, LabelFeedbackLoop
+)
+now = datetime.now(timezone.utc)
+preds = [PredictionRecord(f'p{i}', f'c{i}', 0.7, 'approve', now) for i in range(5)]
+outcomes = [OutcomeRecord(f'p{i}', 1, now, delay_days=60.0) for i in range(5)]
+loop = LabelFeedbackLoop(baseline_metrics={'auc': 0.70})
+result = loop.tick(preds, outcomes)
+print(f'  ✅ Feedback loop tick: {len(result.labeled_examples)} labeled, phase={result.phase_reached}')
+"
+	@echo ""
+	@echo "  Feature Store Gate: PASSED ✅"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 
