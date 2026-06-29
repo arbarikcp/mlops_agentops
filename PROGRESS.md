@@ -285,12 +285,106 @@ uv run pytest tests/unit/test_calibration.py tests/unit/test_threshold.py \
 ---
 
 ## Phase 3 — Data & Label Contracts (Days 19–21)
+**Tag:** `phase3`
+
+### Day Table
 
 | Day | Title | Theory | Deliverable | Status |
 |---|---|---|---|---|
-| 19 | Data Contracts | — | Pandera + GE contract | ☐ |
-| 20 | Label Contracts | — | Ground truth pipeline | ☐ |
-| 21 | Train/Serve Skew | — | Skew detection script | ☐ |
+| 19 | Data Contracts | [day19_data_contracts.md](docs/phase3/day19_data_contracts.md) | `feature_schema.py`, `contract_registry.py`, `statistical_checks.py` | ✅ |
+| 20 | Label Contracts | [day20_label_contracts.md](docs/phase3/day20_label_contracts.md) | `label_contract.py`, `ground_truth.py` | ✅ |
+| 21 | Train/Serve Skew | [day21_train_serve_skew.md](docs/phase3/day21_train_serve_skew.md) | `monitoring/reference_stats.py`, `monitoring/skew_detector.py` | ✅ |
+
+### What's in This Phase
+
+**Theory docs** (`docs/phase3/`):
+
+| File | Content |
+|---|---|
+| [day19_data_contracts.md](docs/phase3/day19_data_contracts.md) | 3 enforcement layers (schema/domain/statistical), freshness, ownership, contract versioning, Pandera patterns |
+| [day20_label_contracts.md](docs/phase3/day20_label_contracts.md) | Label delay problem in credit risk, provenance fields, correction protocol, backfill, label arrival curve, leakage pitfall |
+| [day21_train_serve_skew.md](docs/phase3/day21_train_serve_skew.md) | 3 types of skew, PSI formula + thresholds, KS test, JS divergence, reference stats architecture, per-slice PSI, alert thresholds |
+
+**Code** (`platform/`):
+
+| File | What it does |
+|---|---|
+| `data/contracts/feature_schema.py` | Pandera schema for post-featurization dataset — 32 base + 7 derived columns, semantic bounds on derived features, `check_no_infinite_values()` |
+| `data/contracts/contract_registry.py` | `ContractMetadata` (frozen dataclass: owner, version, enforcement_mode), `ContractRegistry.validate()` (strict / warn / log_only), freshness check, `default_registry` |
+| `data/contracts/statistical_checks.py` | `DatasetStats`, `ColumnStats`, `compute_dataset_stats()`, `check_null_drift()`, `check_mean_drift()` (z-score), `check_class_balance()` |
+| `data/contracts/label_contract.py` | `LabelMetadata`, Pandera `label_batch_schema`, `validate_label_batch()`, `check_label_arrival()`, `check_single_policy_version()`, `check_correction_rate()` |
+| `data/contracts/ground_truth.py` | `join_predictions_with_outcomes()` (filters by outcome delay), `detect_label_corrections()`, `backfill_labels()`, `LabelArrivalCurve` (T+1/7/30/90/180) |
+| `monitoring/__init__.py` | Module init with Phase 3–5 roadmap comment |
+| `monitoring/reference_stats.py` | `ReferenceStats`, `compute_reference_stats()`, `save_reference_stats()` / `load_reference_stats()` (JSON), `check_feature_alignment()` |
+| `monitoring/skew_detector.py` | `compute_psi()`, `compute_ks()`, `compute_js()`, `FeatureSkewResult`, `SkewReport`, `detect_skew()`, `skew_summary()` → DataFrame |
+
+**Tests** (`platform/tests/unit/`):
+
+| File | Tests |
+|---|---|
+| `tests/unit/test_feature_schema.py` | 17 tests — valid passes, derived feature bounds, cleaned categoricals, infinite value detection |
+| `tests/unit/test_contract_registry.py` | 20 tests — immutability, version collision, strict/warn/log_only modes, freshness checks, default registry |
+| `tests/unit/test_statistical_checks.py` | 20 tests — compute_dataset_stats serialisation roundtrip, null drift detection, mean drift z-score, class balance range |
+| `tests/unit/test_label_contract.py` | 20 tests — LabelMetadata validation, schema enforcement, arrival fraction, policy version consistency, correction rate |
+| `tests/unit/test_ground_truth.py` | 20 tests — join filters provisional, backfill deduplication, correction detection, arrival curve horizons |
+| `tests/unit/test_reference_stats.py` | 16 tests — roundtrip JSON serialisation, feature alignment, missing feature detection, parent dir creation |
+| `tests/unit/test_skew_detector.py` | 22 tests — PSI=0 for identical, PSI high for shifted, KS significance, JS bounds, detect_skew report shape, skew_summary sorted |
+
+**Total Phase 3 tests: 145 (all passing)**
+
+### Quick Start (from `git checkout phase3`)
+
+**Prerequisites:** Phase 1 complete — model trained, `data/processed/features.parquet` exists.
+
+```bash
+cd platform
+make install      # uv sync
+
+# Day 19 — Data contracts
+make data-contract   # validates features.parquet against Pandera + statistical checks
+
+# Day 20 — Label contracts (uses synthetic batch — no real outcome data needed)
+make label-contract  # validates label batch schema + arrival timing
+
+# Day 21 — Skew detection
+make skew-detect     # computes reference stats + detects train vs test skew
+                     # saves: metrics/reference_stats.json, metrics/skew_report.csv
+
+# Run Phase 3 unit tests only
+uv run pytest tests/unit/test_feature_schema.py tests/unit/test_contract_registry.py \
+    tests/unit/test_statistical_checks.py tests/unit/test_label_contract.py \
+    tests/unit/test_ground_truth.py tests/unit/test_reference_stats.py \
+    tests/unit/test_skew_detector.py -v
+
+# Run all tests (all phases)
+make test
+```
+
+**Key outputs after running:**
+
+| File | Contents |
+|---|---|
+| `metrics/reference_stats.json` | Training feature statistics snapshot (mean, std, percentiles per column) |
+| `metrics/skew_report.csv` | Per-feature PSI, KS stat, KS p-value, JS divergence, severity, flag |
+
+**Debugging:**
+```bash
+# Contract validation fails with SchemaErrors?
+uv run python -m data.contracts.feature_schema data/processed/features.parquet --verbose
+
+# PSI flagged but you believe data is fine?
+# → Check which feature was flagged (skew_report.csv, sorted by PSI desc)
+# → PSI > 0.20 on a single feature is significant; check upstream pipeline for that column
+# → Remember: PSI uses Gaussian approximation for reference — non-Gaussian features may show noise
+
+# Label arrival < 90% confirmed?
+# → Check outcome_delay_days in LabelMetadata vs your actual label lag
+# → Consider increasing the wait window before the next re-train
+
+# Multiple policy versions in label batch?
+# → This means labels were generated under different rules
+# → Must re-derive all labels under the new policy before training
+```
 
 ---
 

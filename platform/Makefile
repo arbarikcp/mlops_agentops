@@ -9,6 +9,7 @@ SEED = 42
         mlflow-train hpo test test-unit test-data \
         determinism-check reproduce-check \
         calibrate threshold-analysis decision-band slice-eval \
+        data-contract label-contract skew-detect \
         kind-up kind-down
 
 help:
@@ -48,6 +49,11 @@ help:
 	@echo "    make threshold-analysis Find cost-optimal threshold"
 	@echo "    make decision-band     Derive approve/review/decline band"
 	@echo "    make slice-eval        Slice-level AUC + OOD detection"
+	@echo ""
+	@echo "  Phase 3 — Data & Label Contracts (Days 19-21):"
+	@echo "    make data-contract     Validate feature schema + statistical checks"
+	@echo "    make label-contract    Validate a synthetic label batch"
+	@echo "    make skew-detect       Detect train/serve skew (PSI + KS + JS)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -259,6 +265,103 @@ if len(flagged): print(flagged[['slice_col','slice_val','roc_auc','gap']].to_str
 detector = fit_ood_detector(X_train_np)
 report = ood_report(detector, X_test.to_numpy())
 print(f'\nOOD fraction (test set): {report[\"ood_fraction\"]:.4f}')
+"
+
+# ── Phase 3 — Data & Label Contracts ────────────────────────────────────────
+
+data-contract:
+	@echo "→ Validating feature schema + statistical checks (Day 19)..."
+	uv run python -c "
+import pandas as pd
+from data.contracts.feature_schema import validate_features, check_no_infinite_values
+from data.contracts.statistical_checks import compute_dataset_stats, check_null_drift, check_class_balance
+import pandera as pa, sys
+
+df = pd.read_parquet('data/processed/features.parquet')
+print(f'Loaded {len(df)} rows × {len(df.columns)} columns')
+
+inf_cols = check_no_infinite_values(df)
+if inf_cols:
+    print(f'❌ Infinite values in: {inf_cols}'); sys.exit(1)
+print('✅ No infinite values')
+
+try:
+    validate_features(df)
+    print('✅ Feature schema PASSED')
+except pa.errors.SchemaErrors as err:
+    print(f'❌ Feature schema FAILED: {len(err.failure_cases)} violations')
+    print(err.failure_cases.head(5).to_string()); sys.exit(1)
+
+stats = compute_dataset_stats(df, dataset_name='features')
+balance = check_class_balance(stats)
+print(f'Class balance: {balance[\"positive_rate\"]:.1%} (in_range={balance[\"in_range\"]})')
+print('✅ data-contract complete')
+"
+
+label-contract:
+	@echo "→ Validating label batch schema + arrival timing (Day 20)..."
+	uv run python -c "
+import pandas as pd, numpy as np
+from data.contracts.label_contract import validate_label_batch, check_label_arrival, DEFAULT_LABEL_METADATA, check_single_policy_version, check_correction_rate
+import pandera as pa, sys
+
+# Synthetic label batch
+rng = np.random.default_rng(42)
+n = 200
+obs = pd.date_range('2005-01-01', periods=n, freq='D')
+out = obs + pd.Timedelta(days=91)
+df = pd.DataFrame({
+    'applicant_id': range(1, n+1),
+    'label': rng.choice([0,1], n).tolist(),
+    'label_source': ['core_banking'] * n,
+    'policy_version': ['v1.0'] * n,
+    'label_timestamp': ['2005-04-30T00:00:00'] * n,
+    'observation_date': [str(d.date()) for d in obs],
+    'outcome_date': [str(d.date()) for d in out],
+    'is_corrected': [False] * n,
+})
+
+try:
+    validate_label_batch(df)
+    print('✅ Label batch schema PASSED')
+except pa.errors.SchemaErrors as err:
+    print(f'❌ Label batch schema FAILED'); print(err.failure_cases.head(5)); sys.exit(1)
+
+arrival = check_label_arrival(df, DEFAULT_LABEL_METADATA)
+print(f'Label arrival: {arrival[\"pct_confirmed\"]:.0%} confirmed (sufficient={arrival[\"sufficient_for_training\"]})')
+policy = check_single_policy_version(df)
+print(f'Policy consistency: {policy[\"is_consistent\"]} versions={policy[\"policy_versions\"]}')
+corrections = check_correction_rate(df)
+print(f'Correction rate: {corrections[\"correction_rate\"]:.1%} (flag={corrections[\"flag\"]})')
+print('✅ label-contract complete')
+"
+
+skew-detect:
+	@echo "→ Train/serve skew detection — PSI, KS, Jensen-Shannon (Day 21)..."
+	uv run python -c "
+import pandas as pd
+from monitoring.reference_stats import compute_reference_stats, save_reference_stats
+from monitoring.skew_detector import detect_skew, skew_summary
+from pathlib import Path
+
+df = pd.read_parquet('data/processed/features.parquet')
+target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+feat_cols = [c for c in df.columns if c not in [target, 'ID']]
+
+n = len(df)
+X_train = df[feat_cols].iloc[:int(n*0.8)]
+X_test  = df[feat_cols].iloc[int(n*0.8):]
+
+ref = compute_reference_stats(X_train, model_version='phase3-demo', feature_names=feat_cols)
+save_reference_stats(ref, Path('metrics/reference_stats.json'))
+print(f'Reference stats saved: {ref.n_training_rows} rows, {len(ref.feature_names)} features')
+
+report = detect_skew(X_test, ref)
+print(f'Overall severity: {report.overall_severity} | Flagged: {report.n_flagged}/{report.n_features} features')
+summary = skew_summary(report)
+summary.to_csv('metrics/skew_report.csv', index=False)
+print(summary.head(10).to_string())
+print('Skew report saved to metrics/skew_report.csv')
 "
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
