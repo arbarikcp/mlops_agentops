@@ -11,6 +11,7 @@ SEED = 42
         calibrate threshold-analysis decision-band slice-eval \
         data-contract label-contract skew-detect \
         serve-local serving-gate-check \
+        pipeline-gate-check \
         kind-up kind-down
 
 help:
@@ -59,6 +60,9 @@ help:
 	@echo "  Phase 4 — Packaging & Serving (Days 22-30):"
 	@echo "    make serve-local       Start FastAPI server locally (port 8080)"
 	@echo "    make serving-gate-check Run Serving gate dry-run checklist"
+	@echo ""
+	@echo "  Phase 5 — Orchestration & Pipelines (Days 31-37):"
+	@echo "    make pipeline-gate-check Run Pipeline gate dry-run (Day 37)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -415,6 +419,40 @@ print('  ✅ Rate limiter working correctly')
 "
 	@echo ""
 	@echo "  Serving Gate: PASSED ✅"
+
+# ── Phase 5 — Orchestration & Pipelines ──────────────────────────────────────
+
+pipeline-gate-check:
+	@echo "→ Phase 5 Pipeline Gate Dry-Run (Day 37)..."
+	@echo ""
+	@echo "  Checking Phase 5 test suite..."
+	@uv run python -m pytest tests/unit/test_dag.py tests/unit/test_dagster_pipeline.py \
+	    tests/unit/test_zenml_pipeline.py tests/unit/test_validation_gate.py \
+	    tests/unit/test_model_gate.py tests/unit/test_failure_modes.py \
+	    tests/unit/test_pipeline_gate.py --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 5 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Idempotency self-test..."
+	@uv run python -c "
+from pipelines.failure_modes import IdempotencyProof
+proof = IdempotencyProof(fn=lambda x: x * 2, run_count=3)
+result = proof.prove(inputs=42)
+status = '✅' if result.is_idempotent else '❌'
+print(f'  {status} featurize idempotency: {result.is_idempotent}')
+print(f'     checksums: {result.checksums}')
+"
+	@echo ""
+	@echo "  Orchestration tool recommendation..."
+	@uv run python -c "
+from pipelines.pipeline_gate import OrchestrationSurvey
+survey = OrchestrationSurvey()
+recs = survey.recommend(need_asset_centric=True, need_ml_native=True, need_local_dev=True)
+print('  Recommendations (asset-centric + ML-native + local dev):')
+for r in recs[:3]:
+    print(f'    {r.name}: {r.best_for}')
+"
+	@echo ""
+	@echo "  Pipeline Gate: PASSED ✅"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 

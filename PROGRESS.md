@@ -518,16 +518,123 @@ make serving-gate-check
 ---
 
 ## Phase 5 — Orchestration & Pipelines (Days 31–37)
+**Tag:** `phase5`
 
-| Day | Title | Deliverable | Status |
-|---|---|---|---|
-| 31 | Orchestration Principles | (theory) | ☐ |
-| 32 | Dagster Pipeline | Training pipeline as assets | ☐ |
-| 33 | ML-Native (KFP/ZenML) | Light build | ☐ |
-| 34 | Validation Gate | Pandera + GE in pipeline | ☐ |
-| 35 | Model Validation Gate | Champion/challenger | ☐ |
-| 36 | Pipeline Failure Modes | Idempotency proof | ☐ |
-| 37 | Survey + Pipeline Gate | Dry-run | ☐ |
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 31 | Orchestration Principles | [day31_orchestration_principles.md](docs/phase5/day31_orchestration_principles.md) | `pipelines/dag.py` — DagStep, SimpleDag, RunContext, BackfillPlanner | ✅ |
+| 32 | Dagster Pipeline | [day32_dagster_pipeline.md](docs/phase5/day32_dagster_pipeline.md) | `pipelines/dagster_pipeline.py` — PipelineConfig, TrainingAssets, TrainingPipeline | ✅ |
+| 33 | ZenML Pipeline | [day33_zenml_pipeline.md](docs/phase5/day33_zenml_pipeline.md) | `pipelines/zenml_pipeline.py` — StepDef, ZenPipeline, ArtifactStore, CachePolicy | ✅ |
+| 34 | Data Validation Gate | [day34_validation_gate.md](docs/phase5/day34_validation_gate.md) | `pipelines/validation_gate.py` — SchemaCheck, StatisticalCheck, DataValidationGate | ✅ |
+| 35 | Model Validation Gate | [day35_model_gate.md](docs/phase5/day35_model_gate.md) | `pipelines/model_gate.py` — ModelGate, ChampionRegistry, GateThresholds | ✅ |
+| 36 | Pipeline Failure Modes | [day36_failure_modes.md](docs/phase5/day36_failure_modes.md) | `pipelines/failure_modes.py` — FailureClassifier, IdempotencyProof, LineageAuditor | ✅ |
+| 37 | Survey + Pipeline Gate | [day37_survey_pipeline_gate.md](docs/phase5/day37_survey_pipeline_gate.md) | `pipelines/pipeline_gate.py` — PipelineGateRunner, OrchestrationSurvey | ✅ |
+
+### What's in This Phase
+
+**Theory docs** (`docs/phase5/`):
+
+| File | Content |
+|---|---|
+| [day31_orchestration_principles.md](docs/phase5/day31_orchestration_principles.md) | DAG vs asset-centric, idempotency patterns, retry strategy, backfill, lineage, conditional promotion |
+| [day32_dagster_pipeline.md](docs/phase5/day32_dagster_pipeline.md) | Dagster @op/@asset/@resource, IO Manager, partitioning, sensors, Dagster vs Airflow comparison |
+| [day33_zenml_pipeline.md](docs/phase5/day33_zenml_pipeline.md) | ZenML stack, step caching (cache key derivation), materializer, step output versioning |
+| [day34_validation_gate.md](docs/phase5/day34_validation_gate.md) | Pandera + GE integration, gate vs log distinction, lazy collection of failures |
+| [day35_model_gate.md](docs/phase5/day35_model_gate.md) | Metric hierarchy, champion/challenger delta, auto-promote logic, rollback strategy |
+| [day36_failure_modes.md](docs/phase5/day36_failure_modes.md) | Three failure classes (transient/deterministic/corruption), idempotency proof, lineage audit |
+| [day37_survey_pipeline_gate.md](docs/phase5/day37_survey_pipeline_gate.md) | Prefect/Metaflow/Argo/SageMaker/Vertex AI survey, Pipeline gate dry-run checklist |
+
+**Code** (`platform/pipelines/`):
+
+| File | What it does |
+|---|---|
+| `pipelines/dag.py` | `DagStep` (retry + cleanup), `SimpleDag` (dependency-aware), `RunContext`, `RetryPolicy`, `BackfillPlanner` |
+| `pipelines/dagster_pipeline.py` | `PipelineConfig`, `ResourceRegistry`, `TrainingAssets` (6 asset steps), `TrainingPipeline` |
+| `pipelines/zenml_pipeline.py` | `StepDef`, `ZenPipeline`, `ArtifactStore` (disk-persisted cache index), `CachePolicy`, `StackConfig` |
+| `pipelines/validation_gate.py` | `SchemaCheck`, `StatisticalCheck`, `DataValidationGate` (lazy), `ValidationGateFailure`, `credit_risk_gate()` |
+| `pipelines/model_gate.py` | `ModelMetrics`, `GateThresholds`, `ChampionRegistry` (rollback), `ModelGate`, `compute_model_metrics()` |
+| `pipelines/failure_modes.py` | `FailureClassifier`, `IdempotencyProof`, `RetryChecker`, `LineageAuditor` |
+| `pipelines/pipeline_gate.py` | `PipelineGateRunner` (combines all checks), `OrchestrationSurvey` (profiles + `recommend()`) |
+
+**Tests** (`platform/tests/unit/`):
+
+| File | Tests |
+|---|---|
+| `tests/unit/test_dag.py` | 39 tests — RetryPolicy, RunContext, DagStep retry/cleanup, SimpleDag dependency, BackfillPlanner |
+| `tests/unit/test_dagster_pipeline.py` | 33 tests — PipelineConfig, ResourceRegistry, TrainingAssets (all 6 steps), TrainingPipeline end-to-end |
+| `tests/unit/test_zenml_pipeline.py` | 34 tests — StackConfig, ArtifactStore (save/load/cache), StepDef caching, ZenPipeline, credit risk pipeline |
+| `tests/unit/test_validation_gate.py` | 38 tests — SchemaCheck (all constraints), StatisticalCheck (all types), DataValidationGate lazy mode |
+| `tests/unit/test_model_gate.py` | 39 tests — ModelMetrics validation, GateThresholds from_env, ChampionRegistry promote/rollback, ModelGate evaluate |
+| `tests/unit/test_failure_modes.py` | 33 tests — FailureClassifier (priority), IdempotencyProof (pass/fail/exception), RetryChecker, LineageAuditor |
+| `tests/unit/test_pipeline_gate.py` | 30 tests — PipelineGateRunner all checks, OrchestrationSurvey recommend/compare |
+
+**Total Phase 5 tests: 246 (all passing)**
+
+### Quick Start (from `git checkout phase5`)
+
+```bash
+cd platform
+
+# 1. Install deps:
+uv sync
+
+# 2. Run all Phase 5 tests:
+uv run pytest tests/unit/test_dag.py tests/unit/test_dagster_pipeline.py \
+    tests/unit/test_zenml_pipeline.py tests/unit/test_validation_gate.py \
+    tests/unit/test_model_gate.py tests/unit/test_failure_modes.py \
+    tests/unit/test_pipeline_gate.py --override-ini="addopts=" -v
+
+# 3. Run the training pipeline (uses synthetic data if features.parquet not present):
+uv run python -c "
+from pipelines.dagster_pipeline import TrainingPipeline, PipelineConfig
+pipeline = TrainingPipeline.build(PipelineConfig(n_estimators=10, auc_threshold=0.01))
+result = pipeline.run()
+print(f'Pipeline: {\"SUCCESS\" if result.succeeded else \"FAILED\"}')
+for m in result.materializations:
+    print(f'  {m.asset_key}: {m.row_count} rows')
+"
+
+# 4. Run the Pipeline gate dry-run:
+make pipeline-gate-check
+
+# 5. Get orchestration tool recommendation:
+uv run python -c "
+from pipelines.pipeline_gate import OrchestrationSurvey
+survey = OrchestrationSurvey()
+recs = survey.recommend(need_asset_centric=True, need_ml_native=True)
+for r in recs: print(f'{r.name}: {r.best_for}')
+"
+```
+
+**Key outputs after running:**
+
+| Artifact | Contents |
+|---|---|
+| `models/credit_risk_lgbm.pkl` | Trained LightGBM (or GradientBoosting fallback) model |
+| `models/champion_model.pkl` | Promoted champion (if AUC gate passed) |
+| `.zenml_artifacts/` | ZenML-style versioned artifact store (step cache) |
+
+**Debugging:**
+
+```bash
+# Pipeline promotion blocked?
+# → Lower auc_threshold in PipelineConfig (0.01 for synthetic data)
+# → Check validation_report step output
+
+# ZenML cache not hitting?
+# → Inputs changed — check that n_rows and auc_threshold match exactly
+# → Delete .zenml_artifacts/ to reset the cache
+
+# Data validation gate failing?
+# → Check DataFrame has LIMIT_BAL, AGE, default.payment.next.month columns
+# → Check row count >= 100
+
+# Model gate rejecting below threshold?
+# → Adjust GateThresholds.min_auc for test environment
+# → Use GateThresholds.from_env() and set GATE_MIN_AUC=0.50
+```
 
 ---
 
