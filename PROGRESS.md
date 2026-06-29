@@ -639,20 +639,300 @@ for r in recs: print(f'{r.name}: {r.best_for}')
 ---
 
 ## Phase 6 — Feature Store & Closed Feedback Loop (Days 38–45)
+**Tag:** `phase6` *(pending)*
 
-*(to fill as we progress)*
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 38 | Feature Store Problem | [day38_feature_store_problem.md](docs/phase6/day38_feature_store_problem.md) | Skew analysis, point-in-time correctness doc, reuse patterns | ☐ |
+| 39 | Feast Architecture | [day39_feast_architecture.md](docs/phase6/day39_feast_architecture.md) | `features/feast_setup.py` — offline store (Parquet/MinIO) + registry | ☐ |
+| 40 | Feature Views & Point-in-Time Joins | [day40_feature_views.md](docs/phase6/day40_feature_views.md) | `features/feature_views.py` — entities, feature views, PIT joins | ☐ |
+| 41 | Materialization & Online Store | [day41_materialization.md](docs/phase6/day41_materialization.md) | `features/materialization.py` — Redis online store + materialization job | ☐ |
+| 42 | Streaming Features | [day42_streaming_features.md](docs/phase6/day42_streaming_features.md) | `features/streaming.py` — push sources, on-demand transforms | ☐ |
+| 43 | Feature Monitoring | [day43_feature_monitoring.md](docs/phase6/day43_feature_monitoring.md) | `features/feature_monitor.py` — drift, freshness SLAs, data quality | ☐ |
+| 44 | Label Feedback Loop | [day44_label_feedback.md](docs/phase6/day44_label_feedback.md) | `features/feedback_loop.py` — delayed ground truth, active-learning trigger | ☐ |
+| 45 | Consolidation: Zero Skew | [day45_zero_skew.md](docs/phase6/day45_zero_skew.md) | Zero train/serve skew integration test | ☐ |
+
+### Planned Outputs
+
+| Module | What it will do |
+|---|---|
+| `features/feast_setup.py` | Feast `FeatureStore` initialised with MinIO offline + Redis online |
+| `features/feature_views.py` | `CreditRiskEntity`, `CreditRiskFeatureView`, point-in-time join util |
+| `features/materialization.py` | `materialize_incremental()`, backfill runner |
+| `features/streaming.py` | Push-source ingestion + on-demand transform decorators |
+| `features/feature_monitor.py` | `FeatureDriftMonitor`, freshness SLA checker, null-rate watcher |
+| `features/feedback_loop.py` | `LabelFeedbackLoop.step()` — 8-step closed feedback loop skeleton |
 
 ---
 
-## Phase 7 — Monitoring & Closed Loop (Days 46–53)
+## Phase 7 — Monitoring & the Closed Loop (Days 46–53)
+**Tag:** `phase7` *(pending)*
 
-*(to fill as we progress)*
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 46 | Monitoring Taxonomy | [day46_monitoring_taxonomy.md](docs/phase7/day46_monitoring_taxonomy.md) | `monitoring/taxonomy.py` — operational vs ML vs business monitors | ☐ |
+| 47 | Drift & Concept Drift | [day47_drift.md](docs/phase7/day47_drift.md) | `monitoring/drift.py` — PSI, KS, MMD, classifier-based drift | ☐ |
+| 48 | Evidently Integration | [day48_evidently.md](docs/phase7/day48_evidently.md) | `monitoring/evidently_reports.py` — reports + test suites, in-pipeline | ☐ |
+| 49 | Prometheus Custom Metrics | [day49_prometheus.md](docs/phase7/day49_prometheus.md) | `monitoring/prometheus_metrics.py` — custom ML metrics + PromQL examples | ☐ |
+| 50 | Grafana: Golden Signals | [day50_grafana.md](docs/phase7/day50_grafana.md) | `infra/grafana/dashboards/ml_golden_signals.json` — dashboard + alerts | ☐ |
+| 51 | Prediction Logging | [day51_prediction_logging.md](docs/phase7/day51_prediction_logging.md) | `monitoring/prediction_logger.py` — structured log + correlation ID | ☐ |
+| 52 | Closed-Loop Learning | [day52_closed_loop.md](docs/phase7/day52_closed_loop.md) | `monitoring/closed_loop.py` — 8-step loop: predict→decide→outcome→deploy | ☐ |
+| 53 | SLOs + Monitoring Gate | [day53_slo_monitoring_gate.md](docs/phase7/day53_slo_monitoring_gate.md) | `monitoring/slo.py` + Monitoring gate dry-run | ☐ |
+
+### Planned Outputs
+
+| Module | What it will do |
+|---|---|
+| `monitoring/taxonomy.py` | `MonitorType` enum, `MonitorRegistry`, separate alert channels per type |
+| `monitoring/drift.py` | `compute_psi()`, `compute_mmd()`, `ClassifierDrift`, `DriftReport` |
+| `monitoring/evidently_reports.py` | `DataDriftReport`, `ModelPerformanceTestSuite`, pipeline integration hook |
+| `monitoring/prometheus_metrics.py` | `MLMetrics` (prediction_count, latency_histogram, drift_score_gauge) |
+| `monitoring/prediction_logger.py` | `PredictionLogger` — JSON log, correlation ID, audit-ready schema |
+| `monitoring/closed_loop.py` | `ClosedLoop.tick()` — joins labels, recomputes metrics, triggers retrain gate |
+| `monitoring/slo.py` | `SLO`, `ErrorBudget`, `SLOReport`, incident severity mapper |
 
 ---
 
 ## Phase 8 — CI/CD for ML (Days 54–58) → MILESTONE 1 GATE
+**Tag:** `phase8` *(pending)*
 
-*(to fill as we progress)*
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 54 | CI/CD for ML | [day54_cicd_for_ml.md](docs/phase8/day54_cicd_for_ml.md) | ML testing pyramid doc; code + data + model CI explained | ☐ |
+| 55 | Testing ML Code | [day55_testing_ml.md](docs/phase8/day55_testing_ml.md) | `ci/tests/` — unit, data, behavioral, training smoke tests | ☐ |
+| 56 | GitLab CI Pipelines | [day56_gitlab_ci.md](docs/phase8/day56_gitlab_ci.md) | `.gitlab-ci.yml` — stages, runners, caching, artifact upload | ☐ |
+| 57 | Automated Build + CD + SBOM | [day57_cd_signing.md](docs/phase8/day57_cd_signing.md) | `ci/sign.py` — Sigstore signing, SBOM generation, rollback gate | ☐ |
+| 58 | Consolidation + M1 Gate | [day58_milestone1_gate.md](docs/phase8/day58_milestone1_gate.md) | **MILESTONE 1 GATE** — all 4 gates green | ☐ |
+
+> **M1 Gate — you pass when:** given a prediction, you can trace the model version, data version, code version, feature values, request ID, and decision outcome — and you can roll back, retry a failed job safely, and detect drift/quality/infra/business issues separately. Threat model at **v1**.
+
+---
+
+## Phase 9 — Kubernetes for ML (Days 59–70)
+**Tag:** `phase9` *(pending)*
+**Milestone:** 2 — Kubernetes & Cloud ML Platform
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 59 | K8s for ML — Fundamentals | [day59_k8s_fundamentals.md](docs/phase9/day59_k8s_fundamentals.md) | `infra/k8s/` — Pod, Deployment, Service manifests; resource limits | ☐ |
+| 60 | kind Cluster — Deploy + Ingress | [day60_kind_cluster.md](docs/phase9/day60_kind_cluster.md) | `infra/k8s/serving-deployment.yaml` + ingress + `make k8s-deploy` | ☐ |
+| 61 | Helm Chart | [day61_helm_chart.md](docs/phase9/day61_helm_chart.md) | `infra/helm/credit-risk/` — full Helm chart + values.yaml | ☐ |
+| 62 | Storage on K8s | [day62_k8s_storage.md](docs/phase9/day62_k8s_storage.md) | PVC templates, init-container model pull, storage strategy doc | ☐ |
+| 63 | GPU on K8s | [day63_gpu_k8s.md](docs/phase9/day63_gpu_k8s.md) | NVIDIA GPU Operator config, device plugin, node selector/taint manifests | ☐ |
+| 64 | KServe InferenceService | [day64_kserve.md](docs/phase9/day64_kserve.md) | `infra/k8s/kserve-inference.yaml` — predictor + transformer, scale-to-zero | ☐ |
+| 65 | KServe Canary & Traffic Split | [day65_kserve_canary.md](docs/phase9/day65_kserve_canary.md) | `infra/k8s/kserve-canary.yaml` — canary %, shadow/mirror config | ☐ |
+| 66 | Ray on K8s (KubeRay) | [day66_ray_k8s.md](docs/phase9/day66_ray_k8s.md) | `infra/k8s/ray-cluster.yaml` + Ray Serve multi-model pipeline | ☐ |
+| 67 | Autoscaling: HPA + KEDA | [day67_autoscaling.md](docs/phase9/day67_autoscaling.md) | `infra/k8s/hpa.yaml`, `infra/k8s/keda-scaledobject.yaml` | ☐ |
+| 68 | Kueue GPU Scheduling | [day68_kueue.md](docs/phase9/day68_kueue.md) | `infra/k8s/kueue/` — ClusterQueue, LocalQueue, job quota manifests | ☐ |
+| 69 | Prometheus + Grafana on K8s | [day69_k8s_observability.md](docs/phase9/day69_k8s_observability.md) | `infra/k8s/monitoring/` — ServiceMonitor, Grafana dashboards + RBAC | ☐ |
+| 70 | Kubeflow Survey + Consolidation | [day70_kubeflow_survey.md](docs/phase9/day70_kubeflow_survey.md) | Kubeflow Pipelines/Katib/Training Operator comparison doc | ☐ |
+
+---
+
+## Phase 10 — Reliability Lab: Failure Injection (Days 71–73)
+**Tag:** `phase10` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 71 | Chaos Fundamentals + Infra Failures | [day71_chaos_infra.md](docs/phase10/day71_chaos_infra.md) | `ci/chaos/` — MLflow down, MinIO down, KServe stuck, GPU node gone | ☐ |
+| 72 | ML-Specific Incident Drills | [day72_ml_incidents.md](docs/phase10/day72_ml_incidents.md) | Runbooks: bad artifact pushed, stale features, broken retriever | ☐ |
+| 73 | Game Day + Runbooks + Postmortems | [day73_game_day.md](docs/phase10/day73_game_day.md) | `docs/runbooks/` — per-incident runbook templates + postmortem format | ☐ |
+
+---
+
+## Phase 11 — GitOps & Continuous Training (Days 74–77)
+**Tag:** `phase11` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 74 | GitOps: Argo CD / Flux | [day74_gitops.md](docs/phase11/day74_gitops.md) | `infra/argocd/` — Application manifests, sync policy, rollback | ☐ |
+| 75 | Progressive Delivery for Models | [day75_progressive_delivery.md](docs/phase11/day75_progressive_delivery.md) | Blue-green + canary on K8s — Argo Rollouts config | ☐ |
+| 76 | Continuous Training Automation | [day76_continuous_training.md](docs/phase11/day76_continuous_training.md) | `ci/ct_trigger.py` — retrain → registry → deploy; Argo Workflows / Events | ☐ |
+| 77 | Consolidation | [day77_consolidation.md](docs/phase11/day77_consolidation.md) | End-to-end CT test: trigger → train → gate → promote → deploy | ☐ |
+
+---
+
+## Phase 12 — Cloud MLOps: AWS Deep, GCP Mapped (Days 78–90) → MILESTONE 2 GATE
+**Tag:** `phase12` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 78 | Cloud Landscape + IAM-First | [day78_cloud_landscape.md](docs/phase12/day78_cloud_landscape.md) | Cost model doc; IAM strategy; managed-for-dev vs K8s-for-prod framework | ☐ |
+| 79 | AWS Foundations | [day79_aws_foundations.md](docs/phase12/day79_aws_foundations.md) | `infra/aws/` — S3 bucket policy, IAM roles, ECR repo, VPC subnets (IaC) | ☐ |
+| 80 | SageMaker Training | [day80_sagemaker_training.md](docs/phase12/day80_sagemaker_training.md) | `ci/sagemaker_train.py` — ProcessingJob + TrainingJob + Experiments | ☐ |
+| 81 | SageMaker Registry + Endpoints | [day81_sagemaker_registry.md](docs/phase12/day81_sagemaker_registry.md) | Model package group, endpoint config (real-time/serverless/async/batch) | ☐ |
+| 82 | SageMaker Pipelines + Lineage | [day82_sagemaker_pipelines.md](docs/phase12/day82_sagemaker_pipelines.md) | `ci/sagemaker_pipeline.py` — Pipeline DAG, model approval, lineage tracking | ☐ |
+| 83 | SageMaker Monitor + Clarify | [day83_sagemaker_monitor.md](docs/phase12/day83_sagemaker_monitor.md) | Data Quality / Model Quality / Clarify bias monitors wired up | ☐ |
+| 84 | AWS Serving on EKS + Bedrock | [day84_aws_serving.md](docs/phase12/day84_aws_serving.md) | EKS deployment of credit-risk API; Bedrock architecture overview | ☐ |
+| 85 | AWS Cost & Security | [day85_aws_security.md](docs/phase12/day85_aws_security.md) | Spot training config, KMS key policy, PrivateLink endpoint, budget alert | ☐ |
+| 86 | Terraform for ML Infra | [day86_terraform.md](docs/phase12/day86_terraform.md) | `infra/terraform/` — S3, ECR, SageMaker domain, EKS node group | ☐ |
+| 87 | GCP Mapping 1:1 | [day87_gcp_mapping.md](docs/phase12/day87_gcp_mapping.md) | Vertex AI ↔ SageMaker equivalence table + Vertex pipeline hello-world | ☐ |
+| 88 | Platform Portability | [day88_portability.md](docs/phase12/day88_portability.md) | Portability layer doc: MLflow/Feast/K8s as cloud-agnostic core | ☐ |
+| 89 | End-to-End Deploy on AWS | [day89_e2e_aws.md](docs/phase12/day89_e2e_aws.md) | Full backbone running on AWS (EKS + S3 + SageMaker + RDS) | ☐ |
+| 90 | Consolidation + M2 Gate | [day90_milestone2_gate.md](docs/phase12/day90_milestone2_gate.md) | **MILESTONE 2 GATE** — K8s + AWS, autoscaling, canary, 5 failure recoveries | ☐ |
+
+> **M2 Gate — you pass when:** the platform runs on K8s + AWS, fully IaC'd, with autoscaling, canary, proven rollback, cost controls, and you've recovered from at least 5 injected failures with documented runbooks. Threat model at **v2**.
+
+---
+
+## Phase 13 — Scaling & Inference Optimization (Days 91–99)
+**Tag:** `phase13` *(pending)*
+**Milestone:** 3 — Production RAG / LLMOps
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 91 | Distributed Training Theory | [day91_distributed_training.md](docs/phase13/day91_distributed_training.md) | Data/model/pipeline/tensor parallelism; DDP, FSDP, ZeRO deep-dive | ☐ |
+| 92 | Ray Train Multi-GPU | [day92_ray_train.md](docs/phase13/day92_ray_train.md) | `llm/ray_train_job.py` — multi-GPU training job with Ray Train | ☐ |
+| 93 | Training Optimization | [day93_training_optimization.md](docs/phase13/day93_training_optimization.md) | `llm/train_optimized.py` — mixed precision, gradient checkpointing, data loading | ☐ |
+| 94 | Inference Optimization Theory | [day94_inference_optimization.md](docs/phase13/day94_inference_optimization.md) | KV cache, PagedAttention, continuous batching, batching strategies | ☐ |
+| 95 | Quantization for Serving | [day95_quantization.md](docs/phase13/day95_quantization.md) | `llm/quantize.py` — PTQ/QAT, GPTQ/AWQ evaluation, distillation pipeline | ☐ |
+| 96 | Compilation + Runtimes | [day96_runtimes.md](docs/phase13/day96_runtimes.md) | ONNX Runtime, TensorRT-LLM, `torch.compile` benchmark harness | ☐ |
+| 97 | GPU Utilization & Cost | [day97_gpu_cost.md](docs/phase13/day97_gpu_cost.md) | MIG partition config, spot strategy, idle GPU detection script | ☐ |
+| 98 | vLLM Single-Node Deep | [day98_vllm_single_node.md](docs/phase13/day98_vllm_single_node.md) | `llm/vllm_serve.py` — vLLM server config, benchmark, throughput profiling | ☐ |
+| 99 | vLLM on K8s | [day99_vllm_k8s.md](docs/phase13/day99_vllm_k8s.md) | `infra/k8s/vllm-deployment.yaml` + GPU metrics + capacity planning doc | ☐ |
+
+---
+
+## Phase 14 — LLMOps Core (Days 100–108)
+**Tag:** `phase14` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 100 | LLMOps vs MLOps | [day100_llmops_vs_mlops.md](docs/phase14/day100_llmops_vs_mlops.md) | Prompts-as-artifacts, non-determinism handling, cost-as-metric patterns | ☐ |
+| 101 | Serving LLMs on K8s | [day101_llm_serving.md](docs/phase14/day101_llm_serving.md) | `infra/k8s/kserve-llm.yaml` — KServe LLMInferenceService / Ray Serve | ☐ |
+| 102 | Prompt Management & Versioning | [day102_prompt_management.md](docs/phase14/day102_prompt_management.md) | `llm/prompt_registry.py` — prompts-as-code, versioned registry, A/B config | ☐ |
+| 103 | LLM Eval I — Offline | [day103_llm_eval_offline.md](docs/phase14/day103_llm_eval_offline.md) | `llm/eval_offline.py` — reference-based / free / LLM-as-judge eval harness | ☐ |
+| 104 | LLM Eval II — RAGAS | [day104_ragas.md](docs/phase14/day104_ragas.md) | `llm/eval_ragas.py` — faithfulness, context relevance, answer correctness | ☐ |
+| 105 | Fine-Tuning Ops | [day105_finetuning_ops.md](docs/phase14/day105_finetuning_ops.md) | `llm/finetune.py` — LoRA/QLoRA pipeline, dataset versioning, eval-gated gate | ☐ |
+| 106 | LLM Observability | [day106_llm_observability.md](docs/phase14/day106_llm_observability.md) | `llm/otel_tracer.py` — OTel GenAI trace: reasoning→tool→guardrail→response | ☐ |
+| 107 | LLM Monitoring in Prod | [day107_llm_monitoring.md](docs/phase14/day107_llm_monitoring.md) | `llm/quality_monitor.py` — hallucination drift, online eval on sampled traffic | ☐ |
+| 108 | LLM Gateway Architecture | [day108_llm_gateway.md](docs/phase14/day108_llm_gateway.md) | `llm/gateway.py` — model routing, quota enforcement, semantic caching | ☐ |
+
+---
+
+## Phase 15 — RAG Production Operations (Days 109–114) → MILESTONE 3 GATE
+**Tag:** `phase15` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 109 | Index Build Pipeline | [day109_index_pipeline.md](docs/phase15/day109_index_pipeline.md) | `llm/index_pipeline.py` — build, version, rollback index | ☐ |
+| 110 | Chunking + Hybrid Retrieval | [day110_hybrid_retrieval.md](docs/phase15/day110_hybrid_retrieval.md) | `llm/retriever.py` — BM25 + vector hybrid, reranker | ☐ |
+| 111 | Multi-Tenant Retrieval Security | [day111_rag_security.md](docs/phase15/day111_rag_security.md) | `llm/acl_filter.py` — metadata filtering, document ACL propagation | ☐ |
+| 112 | Stale Docs + Embedding Migration | [day112_rag_maintenance.md](docs/phase15/day112_rag_maintenance.md) | `llm/index_maintenance.py` — stale removal, embedding model migration | ☐ |
+| 113 | Retrieval Failure Taxonomy | [day113_retrieval_eval.md](docs/phase15/day113_retrieval_eval.md) | `llm/golden_query_set.py` — golden set, synthetic query gen, failure taxonomy | ☐ |
+| 114 | RAG Guardrails + M3 Gate | [day114_milestone3_gate.md](docs/phase15/day114_milestone3_gate.md) | `llm/guardrails.py` — prompt injection, source trust, Llama Guard + **M3 GATE** | ☐ |
+
+> **M3 Gate — you pass when:** for any answer you can prove "this came from these retrieved chunks, using this prompt version, this embedding model, this index version, this LLM version, and this eval score" — with guardrails active and cost tracked. Threat model at **v3**.
+
+---
+
+## Phase 16 — AgentOps Core (Days 115–122)
+**Tag:** `phase16` *(pending)*
+**Milestone:** 4 — Production AgentOps
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 115 | Why AgentOps is Distinct | [day115_agentops_intro.md](docs/phase16/day115_agentops_intro.md) | Agent lifecycle doc; agent threat model started | ☐ |
+| 116 | Agent Observability Fundamentals | [day116_agent_observability.md](docs/phase16/day116_agent_observability.md) | `agent/tracer.py` — span taxonomy, trace-per-tick, OTel GenAI canonical trace | ☐ |
+| 117 | Instrumenting Agents | [day117_agent_instrumentation.md](docs/phase16/day117_agent_instrumentation.md) | `agent/session_replay.py` — AgentOps SDK integration, session replay | ☐ |
+| 118 | Agent Eval I — Trajectory | [day118_agent_eval_trajectory.md](docs/phase16/day118_agent_eval_trajectory.md) | `agent/trajectory_eval.py` — tool-use correctness, task success, step efficiency | ☐ |
+| 119 | Agent Eval II — LLM-as-Judge | [day119_agent_eval_judge.md](docs/phase16/day119_agent_eval_judge.md) | `agent/composite_eval.py` — composite metrics, gatekeeping, Agent Evals via MCP | ☐ |
+| 120 | Agent Testing | [day120_agent_testing.md](docs/phase16/day120_agent_testing.md) | `agent/simulation.py` — simulation environments, scenario/replay, regression suite | ☐ |
+| 121 | Agent Reliability | [day121_agent_reliability.md](docs/phase16/day121_agent_reliability.md) | `agent/circuit_breaker.py` — retries, fallbacks, timeouts, runaway-loop detection | ☐ |
+| 122 | Agent Memory & State Ops | [day122_agent_memory.md](docs/phase16/day122_agent_memory.md) | `agent/memory.py` — short/long-term memory, vector memory, persistence & recovery | ☐ |
+
+---
+
+## Phase 17 — Agent Security & Tool Safety (Days 123–127)
+**Tag:** `phase17` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 123 | Tool Permission Model | [day123_tool_permissions.md](docs/phase17/day123_tool_permissions.md) | `agent/permissions.py` — per-tool scopes, user identity propagation | ☐ |
+| 124 | Tool Approval Policies | [day124_tool_approval.md](docs/phase17/day124_tool_approval.md) | `agent/approval_policy.py` — high-risk action classifier, dry-run mode | ☐ |
+| 125 | Tool Budget + Sandbox | [day125_tool_sandbox.md](docs/phase17/day125_tool_sandbox.md) | `agent/sandbox.py` — call/timeout budgets, sandbox exec, result validation | ☐ |
+| 126 | MCP Trust + Audit Log + Kill Switch | [day126_mcp_trust.md](docs/phase17/day126_mcp_trust.md) | `agent/audit_log.py` — MCP server trust levels, structured audit log, kill switch | ☐ |
+| 127 | Agent Failure Injection | [day127_agent_chaos.md](docs/phase17/day127_agent_chaos.md) | `agent/failure_injection.py` — tool timeout, infinite loop, guardrail-service down | ☐ |
+
+---
+
+## Phase 18 — Agent Deployment & Multi-Agent (Days 128–130) → MILESTONE 4 GATE
+**Tag:** `phase18` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 128 | Multi-Agent Ops | [day128_multi_agent.md](docs/phase18/day128_multi_agent.md) | `agent/orchestrator.py` — message tracing, hierarchical debugging | ☐ |
+| 129 | Agent Deployment Patterns | [day129_agent_deployment.md](docs/phase18/day129_agent_deployment.md) | K8s long-running agent + async queue + human-in-the-loop approval gate | ☐ |
+| 130 | Consolidation + M4 Gate | [day130_milestone4_gate.md](docs/phase18/day130_milestone4_gate.md) | **MILESTONE 4 GATE** — session replay + kill switch + full audit trail | ☐ |
+
+> **M4 Gate — you pass when:** you can replay an agent session and explain every tool call, failure, retry, permission, cost, and output — with a working kill switch and audit trail. Threat model at **v4**.
+
+---
+
+## Phase 19 — Security, Governance & Responsible AI (Days 131–138)
+**Tag:** `phase19` *(pending)*
+**Milestone:** 5 — Governance, Capstone & SOTA
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 131 | MLSecOps: Threat Model Consolidation | [day131_mlsecops.md](docs/phase19/day131_mlsecops.md) | Lifecycle threat model v4 consolidated + gap analysis | ☐ |
+| 132 | Supply Chain Security | [day132_supply_chain.md](docs/phase19/day132_supply_chain.md) | `ci/sbom.py` — SBOM generation, Sigstore signing, provenance chain | ☐ |
+| 133 | Adversarial & Privacy Attacks | [day133_adversarial.md](docs/phase19/day133_adversarial.md) | Evasion, membership inference, model inversion/extraction defenses | ☐ |
+| 134 | Privacy-Preserving ML | [day134_privacy_ml.md](docs/phase19/day134_privacy_ml.md) | PII handling, differential privacy basics, federated inference overview | ☐ |
+| 135 | Access Control at Scale | [day135_access_control.md](docs/phase19/day135_access_control.md) | RBAC manifests, secret rotation runbook, KMS/CMEK key policy | ☐ |
+| 136 | Model Governance | [day136_model_governance.md](docs/phase19/day136_model_governance.md) | Model card template, registry-as-governance, approval workflow | ☐ |
+| 137 | Regulatory + Fairness Ops | [day137_regulatory.md](docs/phase19/day137_regulatory.md) | EU AI Act / NIST AI RMF mapping; Clarify/SHAP gate checklist | ☐ |
+| 138 | Governance Evidence Pack | [day138_governance_pack.md](docs/phase19/day138_governance_pack.md) | `docs/governance/` — model card + data card + eval card + risk register | ☐ |
+
+---
+
+## Phase 20 — Capstone & State-of-the-Art (Days 139–148) → MILESTONE 5 GATE
+**Tag:** `phase20` *(pending)*
+
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 139 | Capstone: Era A Integration | [day139_capstone_era_a.md](docs/phase20/day139_capstone_era_a.md) | Classical MLOps (credit-risk) — all gates green, CI/CD/CT, K8s + AWS | ☐ |
+| 140 | Capstone: Era B Integration | [day140_capstone_era_b.md](docs/phase20/day140_capstone_era_b.md) | LLMOps (RAG assistant) — vLLM serving, RAGAS eval, prompt registry | ☐ |
+| 141 | Capstone: Era C Integration | [day141_capstone_era_c.md](docs/phase20/day141_capstone_era_c.md) | AgentOps (support agent) — risk model + RAG assistant, MCP tools | ☐ |
+| 142 | Capstone: Three-Era Unification | [day142_capstone_unify.md](docs/phase20/day142_capstone_unify.md) | Single platform — one trace through all three eras end-to-end | ☐ |
+| 143 | Capstone: All Six Gates Green | [day143_all_gates.md](docs/phase20/day143_all_gates.md) | Reproducibility ✅ Serving ✅ Pipeline ✅ Monitoring ✅ Security ✅ AgentOps ✅ | ☐ |
+| 144 | Capstone: Terraform + Full IaC | [day144_capstone_iac.md](docs/phase20/day144_capstone_iac.md) | Entire platform Terraform-managed + DR runbook | ☐ |
+| 145 | SOTA Serving: llm-d | [day145_sota_serving.md](docs/phase20/day145_sota_serving.md) | Disaggregated inference, prefix-cache-aware routing, llm-d survey | ☐ |
+| 146 | SOTA Eval + Self-Improving Loops | [day146_sota_eval.md](docs/phase20/day146_sota_eval.md) | Full-traffic online eval economics, self-improving eval loop design | ☐ |
+| 147 | Frontier Research | [day147_frontier.md](docs/phase20/day147_frontier.md) | Federated/edge inference, agentic infrastructure research, how to stay current | ☐ |
+| 148 | Retrospective + Portfolio | [day148_retrospective.md](docs/phase20/day148_retrospective.md) | Portfolio doc + golden-path platform template + **MILESTONE 5 GATE** | ☐ |
+
+> **M5 Gate — you pass when:** all six production gates are green across all three eras, the platform is fully IaC'd, and you can hand a stranger a `git clone` + `make up` that gives them the entire running system.
 
 ---
 
