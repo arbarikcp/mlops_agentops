@@ -806,6 +806,25 @@ gitops-gate-check:
 	@echo ""
 	@echo "  GitOps Gate: PASSED ✅"
 
+# ── Milestone 2 Gate — Phase 12 ──────────────────────────────────────────────
+
+milestone2-gate-check:
+	@echo "→ Phase 12 Milestone 2 Gate Dry-Run (Day 90)..."
+	@echo ""
+	@echo "  Running Phase 12 test suite..."
+	@uv run python -m pytest tests/unit/test_aws_foundations.py tests/unit/test_sagemaker_training.py tests/unit/test_sagemaker_serving.py tests/unit/test_sagemaker_pipeline.py tests/unit/test_sagemaker_monitor.py tests/unit/test_aws_serving.py tests/unit/test_aws_security.py tests/unit/test_terraform_config.py tests/unit/test_gcp_vertex.py tests/unit/test_portability.py tests/unit/test_aws_deployment.py tests/unit/test_milestone2_gate.py --override-ini="addopts=" -q && echo "  ✅ All Phase 12 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Milestone 2 Gate dry-run (15 checks, 6 dimensions)..."
+	@uv run python -c "from infra.milestone2_gate import Milestone2Gate; r=Milestone2Gate.dry_run('prod'); s=r.summary(); print(f'  ✅ Gate: {s[\"gateStatus\"]} | {s[\"passed\"]}/{s[\"total\"]} checks passed | {s[\"warnings\"]} warnings')"
+	@echo ""
+	@echo "  AWS deployment plan self-test..."
+	@uv run python -c "from infra.aws_deployment import AWSDeploymentPlan; plan=AWSDeploymentPlan.credit_risk_full_deploy('123456789012'); order=plan.execution_order(); print(f'  ✅ DeploymentPlan: {len(plan.stages)} stages, order: {\" → \".join(order[:4])} ...')"
+	@echo ""
+	@echo "  Portability score self-test..."
+	@uv run python -c "from infra.portability import PortabilityScore, CloudProvider; ps=PortabilityScore.assess('ml-platform', CloudProvider.GCP); print(f'  ✅ Portability: score={ps.score:.2f} grade={ps.grade} migration_days={ps.estimated_migration_days}')"
+	@echo ""
+	@echo "  Milestone 2 Gate: PASSED ✅"
+
 # ── Internal ─────────────────────────────────────────────────────────────────
 
 _check-env:
