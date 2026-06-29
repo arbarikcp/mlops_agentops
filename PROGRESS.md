@@ -702,33 +702,69 @@ uv run pytest tests/unit/test_feature_store.py tests/unit/test_feature_views.py 
 
 ---
 
-## Phase 7 — Monitoring & the Closed Loop (Days 46–53)
-**Tag:** `phase7` *(pending)*
+## Phase 7 — Monitoring & the Closed Loop (Days 46–53) ✅
+**Tag:** `phase7`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 46 | Monitoring Taxonomy | [day46_monitoring_taxonomy.md](docs/phase7/day46_monitoring_taxonomy.md) | `monitoring/taxonomy.py` — operational vs ML vs business monitors | ☐ |
-| 47 | Drift & Concept Drift | [day47_drift.md](docs/phase7/day47_drift.md) | `monitoring/drift.py` — PSI, KS, MMD, classifier-based drift | ☐ |
-| 48 | Evidently Integration | [day48_evidently.md](docs/phase7/day48_evidently.md) | `monitoring/evidently_reports.py` — reports + test suites, in-pipeline | ☐ |
-| 49 | Prometheus Custom Metrics | [day49_prometheus.md](docs/phase7/day49_prometheus.md) | `monitoring/prometheus_metrics.py` — custom ML metrics + PromQL examples | ☐ |
-| 50 | Grafana: Golden Signals | [day50_grafana.md](docs/phase7/day50_grafana.md) | `infra/grafana/dashboards/ml_golden_signals.json` — dashboard + alerts | ☐ |
-| 51 | Prediction Logging | [day51_prediction_logging.md](docs/phase7/day51_prediction_logging.md) | `monitoring/prediction_logger.py` — structured log + correlation ID | ☐ |
-| 52 | Closed-Loop Learning | [day52_closed_loop.md](docs/phase7/day52_closed_loop.md) | `monitoring/closed_loop.py` — 8-step loop: predict→decide→outcome→deploy | ☐ |
-| 53 | SLOs + Monitoring Gate | [day53_slo_monitoring_gate.md](docs/phase7/day53_slo_monitoring_gate.md) | `monitoring/slo.py` + Monitoring gate dry-run | ☐ |
+| 46 | Monitoring Taxonomy | [day46_monitoring_taxonomy.md](docs/phase7/day46_monitoring_taxonomy.md) | `monitoring/taxonomy.py` | ✅ |
+| 47 | Drift & Concept Drift | [day47_drift.md](docs/phase7/day47_drift.md) | `monitoring/drift.py` | ✅ |
+| 48 | Evidently Integration | [day48_evidently.md](docs/phase7/day48_evidently.md) | `monitoring/evidently_reporter.py` | ✅ |
+| 49 | Prometheus Custom Metrics | [day49_prometheus.md](docs/phase7/day49_prometheus.md) | `monitoring/prometheus_metrics.py` | ✅ |
+| 50 | Grafana: Golden Signals | [day50_grafana.md](docs/phase7/day50_grafana.md) | `monitoring/grafana_dashboard.py` + JSON | ✅ |
+| 51 | Prediction Logging | [day51_prediction_logging.md](docs/phase7/day51_prediction_logging.md) | `monitoring/prediction_logger.py` | ✅ |
+| 52 | Closed-Loop Learning | [day52_closed_loop.md](docs/phase7/day52_closed_loop.md) | `monitoring/closed_loop.py` | ✅ |
+| 53 | SLOs + Monitoring Gate | [day53_slo_monitoring_gate.md](docs/phase7/day53_slo_monitoring_gate.md) | `monitoring/slo.py` | ✅ |
 
-### Planned Outputs
+### Code Modules
 
-| Module | What it will do |
+| Module | Key Classes | Description |
+|---|---|---|
+| `monitoring/taxonomy.py` | `MonitorRegistry`, `Monitor`, `MonitorResult` | Three-pillar taxonomy (OPERATIONAL/ML/BUSINESS) with typed alert routing |
+| `monitoring/drift.py` | `DriftDetector`, `DriftReport`, `FeatureDriftResult` | PSI, KS, MMD, classifier-based drift — four complementary metrics |
+| `monitoring/evidently_reporter.py` | `EvidentlyReporter`, `EvidentlyResult` | Adapter over Evidently with DriftDetector fallback |
+| `monitoring/prometheus_metrics.py` | `MLMetricsCollector`, `MetricSnapshot` | Counters, histograms, gauges; text exposition format for /metrics |
+| `monitoring/grafana_dashboard.py` | `GrafanaDashboard`, `Panel`, `PanelTarget` | JSON dashboard builder; canonical dashboard in `infra/grafana/dashboards/` |
+| `monitoring/prediction_logger.py` | `PredictionLogger`, `PredictionLogEntry` | JSONL audit log with correlation IDs; supports replay |
+| `monitoring/closed_loop.py` | `ClosedLoop`, `LoopApprover`, `ClosedLoopState` | 8-step orchestration: serve+log → join → recompute → trigger → approve |
+| `monitoring/slo.py` | `SLOChecker`, `SLOReport`, `BudgetStatus` | GREEN/YELLOW/RED/EXHAUSTED budget tracking for 5 SLO types |
+
+### Test Coverage
+
+| Test File | Tests |
 |---|---|
-| `monitoring/taxonomy.py` | `MonitorType` enum, `MonitorRegistry`, separate alert channels per type |
-| `monitoring/drift.py` | `compute_psi()`, `compute_mmd()`, `ClassifierDrift`, `DriftReport` |
-| `monitoring/evidently_reports.py` | `DataDriftReport`, `ModelPerformanceTestSuite`, pipeline integration hook |
-| `monitoring/prometheus_metrics.py` | `MLMetrics` (prediction_count, latency_histogram, drift_score_gauge) |
-| `monitoring/prediction_logger.py` | `PredictionLogger` — JSON log, correlation ID, audit-ready schema |
-| `monitoring/closed_loop.py` | `ClosedLoop.tick()` — joins labels, recomputes metrics, triggers retrain gate |
-| `monitoring/slo.py` | `SLO`, `ErrorBudget`, `SLOReport`, incident severity mapper |
+| `tests/unit/test_taxonomy.py` | 22 |
+| `tests/unit/test_drift.py` | 27 |
+| `tests/unit/test_evidently_reporter.py` | 16 |
+| `tests/unit/test_prometheus_metrics.py` | 20 |
+| `tests/unit/test_grafana_dashboard.py` | 17 |
+| `tests/unit/test_prediction_logger.py` | 22 |
+| `tests/unit/test_closed_loop.py` | 18 |
+| `tests/unit/test_slo.py` | 37 |
+| **Total** | **179** |
+
+### Quick Start
+
+```bash
+make monitoring-gate-check
+
+uv run pytest tests/unit/test_taxonomy.py tests/unit/test_drift.py \
+    tests/unit/test_evidently_reporter.py tests/unit/test_prometheus_metrics.py \
+    tests/unit/test_grafana_dashboard.py tests/unit/test_prediction_logger.py \
+    tests/unit/test_closed_loop.py tests/unit/test_slo.py -v
+```
+
+### Key Concepts
+
+- **Alert routing by type** — OPERATIONAL → `#oncall-infra`, ML → `#ml-alerts`, BUSINESS → `#business-risk`. Never mix.
+- **Four drift metrics** — PSI (industry standard), KS (significance test), MMD (kernel-space, no binning), Classifier AUC (model-based). Use all four for confidence.
+- **Evidently fallback** — `EvidentlyReporter` transparently falls back to `DriftDetector` when Evidently isn't installed. Same API, same result type.
+- **Text exposition** — `MLMetricsCollector.format_text_exposition()` generates Prometheus-compatible `/metrics` payload without requiring the `prometheus_client` library.
+- **Correlation IDs** — every `PredictionLogEntry` has both a `prediction_id` (for outcome join) and a `correlation_id` (for request-level tracing across microservices).
+- **Closed loop AUTO approval** — `LoopApprover(AUTO)` approves automatically if AUC improves; HUMAN mode returns PENDING for regulated environments.
+- **Error budget states** — GREEN (>50% remaining), YELLOW (10–50%), RED (<10%), EXHAUSTED (0%). Only RED/EXHAUSTED block the promotion gate.
 
 ---
 

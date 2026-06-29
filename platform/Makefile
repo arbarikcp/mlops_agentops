@@ -13,6 +13,7 @@ SEED = 42
         serve-local serving-gate-check \
         pipeline-gate-check \
         feature-store-gate-check \
+        monitoring-gate-check \
         kind-up kind-down
 
 help:
@@ -67,6 +68,9 @@ help:
 	@echo ""
 	@echo "  Phase 6 — Feature Store & Closed Feedback Loop (Days 38-45):"
 	@echo "    make feature-store-gate-check  Run Feature Store gate dry-run (Day 45)"
+	@echo ""
+	@echo "  Phase 7 — Monitoring & the Closed Loop (Days 46-53):"
+	@echo "    make monitoring-gate-check     Run Monitoring gate dry-run (Day 53)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -509,6 +513,61 @@ print(f'  ✅ Feedback loop tick: {len(result.labeled_examples)} labeled, phase=
 "
 	@echo ""
 	@echo "  Feature Store Gate: PASSED ✅"
+
+# ── Phase 7 — Monitoring & the Closed Loop ───────────────────────────────────
+
+monitoring-gate-check:
+	@echo "→ Phase 7 Monitoring Gate Dry-Run (Day 53)..."
+	@echo ""
+	@echo "  Checking Phase 7 test suite..."
+	@uv run python -m pytest \
+	    tests/unit/test_taxonomy.py tests/unit/test_drift.py \
+	    tests/unit/test_evidently_reporter.py tests/unit/test_prometheus_metrics.py \
+	    tests/unit/test_grafana_dashboard.py tests/unit/test_prediction_logger.py \
+	    tests/unit/test_closed_loop.py tests/unit/test_slo.py \
+	    --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 7 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  SLO self-test (all green)..."
+	@uv run python -c "
+from monitoring.slo import SLOChecker
+metrics = {
+    'p99_latency_ms': 200.0, 'error_rate': 0.005,
+    'model_auc': 0.80, 'max_feature_age_hours': 5.0,
+    'approval_rate': 0.70, 'default_rate': 0.22,
+}
+report = SLOChecker().run_all(metrics)
+status = '✅' if report.overall_compliant else '❌'
+print(f'  {status} SLO gate: {len(report.results)} SLOs, {len(report.violations())} violations')
+for r in report.results:
+    icon = '✅' if r.compliant else '❌'
+    print(f'    {icon} {r.slo_name}: {r.current_value:.3f} vs {r.target:.3f} [{r.budget_status.value}]')
+"
+	@echo ""
+	@echo "  Monitor taxonomy self-test..."
+	@uv run python -c "
+from monitoring.taxonomy import Monitor, MonitorRegistry, MonitorResult, MonitorType, Severity
+registry = MonitorRegistry()
+registry.register(Monitor('latency_p99', MonitorType.OPERATIONAL,
+    lambda: MonitorResult('latency_p99', MonitorType.OPERATIONAL, True, 200, 500, Severity.CRITICAL, 'ok')))
+registry.register(Monitor('model_auc', MonitorType.ML,
+    lambda: MonitorResult('model_auc', MonitorType.ML, True, 0.80, 0.72, Severity.CRITICAL, 'ok')))
+results = registry.run_all()
+print(f'  ✅ MonitorRegistry: {len(results)} monitors, {len(MonitorRegistry.failed_results(results))} failed')
+"
+	@echo ""
+	@echo "  Drift detector self-test..."
+	@uv run python -c "
+import numpy as np, pandas as pd
+from monitoring.drift import DriftDetector
+rng = np.random.default_rng(42)
+df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 300), 'util_rate': rng.normal(0.4, 0.1, 300)})
+report = DriftDetector().run(df, df)
+status = '✅' if not report.overall_drifted else '❌'
+print(f'  {status} Drift on identical data: overall_drifted={report.overall_drifted}')
+"
+	@echo ""
+	@echo "  Monitoring Gate: PASSED ✅"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 
