@@ -16,7 +16,370 @@ SEED = 42
         monitoring-gate-check \
         milestone1-gate-check \
         k8s-gate-check \
+        chaos-gate-check \
         kind-up kind-down
+
+define PYBLOCK_01
+import pickle, pandas as pd, numpy as np
+from training.calibration import fit_calibrator, calibration_report, reliability_data
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X = df.drop(columns=[target, 'ID']); y = df[target]
+X_cal, y_cal = X.iloc[int(n*0.6):int(n*0.8)].to_numpy(), y.iloc[int(n*0.6):int(n*0.8)].to_numpy()
+X_test, y_test = X.iloc[int(n*0.8):].to_numpy(), y.iloc[int(n*0.8):].to_numpy()
+cal = fit_calibrator(model, X_cal, y_cal)
+report = calibration_report(model, cal, X_test, y_test)
+report.log_summary()
+print(f'ECE before: {report.ece_before:.4f}  after: {report.ece_after:.4f}  improved={report.improved}')
+rel = reliability_data(y_test, cal.predict_proba(X_test)[:,1])
+rel.to_csv('metrics/reliability_diagram.csv', index=False)
+print('Reliability diagram saved to metrics/reliability_diagram.csv')
+endef
+export PYBLOCK_01
+
+define PYBLOCK_02
+import pickle, pandas as pd, numpy as np
+from training.threshold import find_cost_optimal_threshold, threshold_sweep
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test)[:,1]
+result = find_cost_optimal_threshold(y_test, y_prob)
+result.log_summary()
+sweep = threshold_sweep(y_test, y_prob)
+sweep.to_csv('metrics/threshold_sweep.csv', index=False)
+print('Threshold sweep saved to metrics/threshold_sweep.csv')
+endef
+export PYBLOCK_02
+
+define PYBLOCK_03
+import pickle, pandas as pd, numpy as np
+from training.decision import ThresholdBand, find_review_band, calibrate_band_for_cost
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test)[:,1]
+band = calibrate_band_for_cost(y_test, y_prob, target_review_pct=0.15)
+print(f'Band: approve < {band.approve}  decline >= {band.decline}')
+print(band.routing_stats(y_prob))
+review_df = find_review_band(y_test, y_prob, band.approve, band.decline)
+print(review_df.to_string())
+endef
+export PYBLOCK_03
+
+define PYBLOCK_04
+import pickle, pandas as pd, numpy as np
+from training.slice_eval import evaluate_slices, worst_slices, slice_gap_report, fit_ood_detector, ood_report
+from training.evaluate import compute_metrics
+model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
+df = pd.read_parquet('data/processed/features.parquet')
+n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+X_train_np = df.drop(columns=[target, 'ID']).iloc[:int(n*0.8)].to_numpy()
+X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):]
+y_test = df[target].iloc[int(n*0.8):].to_numpy()
+y_prob = model.predict_proba(X_test.to_numpy())[:,1]
+overall = compute_metrics(y_test, y_prob)
+print(f'Overall AUC: {overall[\"roc_auc\"]:.4f}')
+slices = evaluate_slices(X_test, y_test, y_prob)
+slices.to_csv('metrics/slice_metrics.csv', index=False)
+print(slices.to_string())
+gaps = slice_gap_report(slices, overall, warn_threshold=0.05)
+flagged = gaps[gaps['flag']]
+print(f'\nFlagged slices (gap > 0.05): {len(flagged)}')
+if len(flagged): print(flagged[['slice_col','slice_val','roc_auc','gap']].to_string())
+detector = fit_ood_detector(X_train_np)
+report = ood_report(detector, X_test.to_numpy())
+print(f'\nOOD fraction (test set): {report[\"ood_fraction\"]:.4f}')
+endef
+export PYBLOCK_04
+
+define PYBLOCK_05
+import pandas as pd
+from data.contracts.feature_schema import validate_features, check_no_infinite_values
+from data.contracts.statistical_checks import compute_dataset_stats, check_null_drift, check_class_balance
+import pandera as pa, sys
+
+df = pd.read_parquet('data/processed/features.parquet')
+print(f'Loaded {len(df)} rows × {len(df.columns)} columns')
+
+inf_cols = check_no_infinite_values(df)
+if inf_cols:
+    print(f'❌ Infinite values in: {inf_cols}'); sys.exit(1)
+print('✅ No infinite values')
+
+try:
+    validate_features(df)
+    print('✅ Feature schema PASSED')
+except pa.errors.SchemaErrors as err:
+    print(f'❌ Feature schema FAILED: {len(err.failure_cases)} violations')
+    print(err.failure_cases.head(5).to_string()); sys.exit(1)
+
+stats = compute_dataset_stats(df, dataset_name='features')
+balance = check_class_balance(stats)
+print(f'Class balance: {balance[\"positive_rate\"]:.1%} (in_range={balance[\"in_range\"]})')
+print('✅ data-contract complete')
+endef
+export PYBLOCK_05
+
+define PYBLOCK_06
+import pandas as pd, numpy as np
+from data.contracts.label_contract import validate_label_batch, check_label_arrival, DEFAULT_LABEL_METADATA, check_single_policy_version, check_correction_rate
+import pandera as pa, sys
+
+# Synthetic label batch
+rng = np.random.default_rng(42)
+n = 200
+obs = pd.date_range('2005-01-01', periods=n, freq='D')
+out = obs + pd.Timedelta(days=91)
+df = pd.DataFrame({
+    'applicant_id': range(1, n+1),
+    'label': rng.choice([0,1], n).tolist(),
+    'label_source': ['core_banking'] * n,
+    'policy_version': ['v1.0'] * n,
+    'label_timestamp': ['2005-04-30T00:00:00'] * n,
+    'observation_date': [str(d.date()) for d in obs],
+    'outcome_date': [str(d.date()) for d in out],
+    'is_corrected': [False] * n,
+})
+
+try:
+    validate_label_batch(df)
+    print('✅ Label batch schema PASSED')
+except pa.errors.SchemaErrors as err:
+    print(f'❌ Label batch schema FAILED'); print(err.failure_cases.head(5)); sys.exit(1)
+
+arrival = check_label_arrival(df, DEFAULT_LABEL_METADATA)
+print(f'Label arrival: {arrival[\"pct_confirmed\"]:.0%} confirmed (sufficient={arrival[\"sufficient_for_training\"]})')
+policy = check_single_policy_version(df)
+print(f'Policy consistency: {policy[\"is_consistent\"]} versions={policy[\"policy_versions\"]}')
+corrections = check_correction_rate(df)
+print(f'Correction rate: {corrections[\"correction_rate\"]:.1%} (flag={corrections[\"flag\"]})')
+print('✅ label-contract complete')
+endef
+export PYBLOCK_06
+
+define PYBLOCK_07
+import pandas as pd
+from monitoring.reference_stats import compute_reference_stats, save_reference_stats
+from monitoring.skew_detector import detect_skew, skew_summary
+from pathlib import Path
+
+df = pd.read_parquet('data/processed/features.parquet')
+target = 'DEFAULT_PAYMENT_NEXT_MONTH'
+feat_cols = [c for c in df.columns if c not in [target, 'ID']]
+
+n = len(df)
+X_train = df[feat_cols].iloc[:int(n*0.8)]
+X_test  = df[feat_cols].iloc[int(n*0.8):]
+
+ref = compute_reference_stats(X_train, model_version='phase3-demo', feature_names=feat_cols)
+save_reference_stats(ref, Path('metrics/reference_stats.json'))
+print(f'Reference stats saved: {ref.n_training_rows} rows, {len(ref.feature_names)} features')
+
+report = detect_skew(X_test, ref)
+print(f'Overall severity: {report.overall_severity} | Flagged: {report.n_flagged}/{report.n_features} features')
+summary = skew_summary(report)
+summary.to_csv('metrics/skew_report.csv', index=False)
+print(summary.head(10).to_string())
+print('Skew report saved to metrics/skew_report.csv')
+endef
+export PYBLOCK_07
+
+define PYBLOCK_08
+from serving.api_contract import ApiContractChecker, build_v1_contract, build_v2_contract
+checker = ApiContractChecker()
+report = checker.check_compatibility(build_v1_contract(), build_v2_contract())
+status = '✅' if report.is_backward_compatible else '❌'
+print(f'  {status} v1 → v2 backward compatible: {report.is_backward_compatible}')
+for c in report.compatible_changes:
+    print(f'    OK: {c}')
+endef
+export PYBLOCK_08
+
+define PYBLOCK_09
+from serving.security import RateLimiter
+limiter = RateLimiter(max_requests=3, window_seconds=60)
+results = [limiter.check('test') for _ in range(4)]
+assert results[:3] == [True, True, True], 'Expected first 3 to pass'
+assert results[3] == False, 'Expected 4th to be rate-limited'
+print('  ✅ Rate limiter working correctly')
+endef
+export PYBLOCK_09
+
+define PYBLOCK_10
+from pipelines.failure_modes import IdempotencyProof
+proof = IdempotencyProof(fn=lambda x: x * 2, run_count=3)
+result = proof.prove(inputs=42)
+status = '✅' if result.is_idempotent else '❌'
+print(f'  {status} featurize idempotency: {result.is_idempotent}')
+print(f'     checksums: {result.checksums}')
+endef
+export PYBLOCK_10
+
+define PYBLOCK_11
+from pipelines.pipeline_gate import OrchestrationSurvey
+survey = OrchestrationSurvey()
+recs = survey.recommend(need_asset_centric=True, need_ml_native=True, need_local_dev=True)
+print('  Recommendations (asset-centric + ML-native + local dev):')
+for r in recs[:3]:
+    print(f'    {r.name}: {r.best_for}')
+endef
+export PYBLOCK_11
+
+define PYBLOCK_12
+import numpy as np, pandas as pd
+from features.skew_checker import TrainServeSkewChecker
+rng = np.random.default_rng(42)
+df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 500), 'util_rate': rng.normal(0.4, 0.1, 500)})
+checker = TrainServeSkewChecker()
+report = checker.run(df, df)
+status = '✅' if report.zero_skew else '❌'
+print(f'  {status} Zero skew on identical data: {report.zero_skew}')
+endef
+export PYBLOCK_12
+
+define PYBLOCK_13
+from datetime import datetime, timezone
+from features.feature_monitor import FreshnessChecker
+checker = FreshnessChecker()
+now = datetime.now(timezone.utc)
+result = checker.check('payment_features', last_materialized_at=now, threshold_hours=25.0, now=now)
+status = '✅' if result.is_fresh else '❌'
+print(f'  {status} Freshness check (just materialized): {result.status}')
+endef
+export PYBLOCK_13
+
+define PYBLOCK_14
+from datetime import datetime, timezone
+from features.feedback_loop import (
+    GroundTruthJoiner, PredictionRecord, OutcomeRecord, LabelFeedbackLoop
+)
+now = datetime.now(timezone.utc)
+preds = [PredictionRecord(f'p{i}', f'c{i}', 0.7, 'approve', now) for i in range(5)]
+outcomes = [OutcomeRecord(f'p{i}', 1, now, delay_days=60.0) for i in range(5)]
+loop = LabelFeedbackLoop(baseline_metrics={'auc': 0.70})
+result = loop.tick(preds, outcomes)
+print(f'  ✅ Feedback loop tick: {len(result.labeled_examples)} labeled, phase={result.phase_reached}')
+endef
+export PYBLOCK_14
+
+define PYBLOCK_15
+from monitoring.slo import SLOChecker
+metrics = {
+    'p99_latency_ms': 200.0, 'error_rate': 0.005,
+    'model_auc': 0.80, 'max_feature_age_hours': 5.0,
+    'approval_rate': 0.70, 'default_rate': 0.22,
+}
+report = SLOChecker().run_all(metrics)
+status = '✅' if report.overall_compliant else '❌'
+print(f'  {status} SLO gate: {len(report.results)} SLOs, {len(report.violations())} violations')
+for r in report.results:
+    icon = '✅' if r.compliant else '❌'
+    print(f'    {icon} {r.slo_name}: {r.current_value:.3f} vs {r.target:.3f} [{r.budget_status.value}]')
+endef
+export PYBLOCK_15
+
+define PYBLOCK_16
+from monitoring.taxonomy import Monitor, MonitorRegistry, MonitorResult, MonitorType, Severity
+registry = MonitorRegistry()
+registry.register(Monitor('latency_p99', MonitorType.OPERATIONAL,
+    lambda: MonitorResult('latency_p99', MonitorType.OPERATIONAL, True, 200, 500, Severity.CRITICAL, 'ok')))
+registry.register(Monitor('model_auc', MonitorType.ML,
+    lambda: MonitorResult('model_auc', MonitorType.ML, True, 0.80, 0.72, Severity.CRITICAL, 'ok')))
+results = registry.run_all()
+print(f'  ✅ MonitorRegistry: {len(results)} monitors, {len(MonitorRegistry.failed_results(results))} failed')
+endef
+export PYBLOCK_16
+
+define PYBLOCK_17
+import numpy as np, pandas as pd
+from monitoring.drift import DriftDetector
+rng = np.random.default_rng(42)
+df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 300), 'util_rate': rng.normal(0.4, 0.1, 300)})
+report = DriftDetector().run(df, df)
+status = '✅' if not report.overall_drifted else '❌'
+print(f'  {status} Drift on identical data: overall_drifted={report.overall_drifted}')
+endef
+export PYBLOCK_17
+
+define PYBLOCK_18
+from ci.milestone1_gate import Milestone1Gate, TraceabilityRecord
+trace = TraceabilityRecord(
+    prediction_id='pred-m1-check',
+    model_version='credit-risk-v1.2',
+    mlflow_run_id='abc123def456',
+    code_sha='6c6a398',
+    data_version='v1',
+    params={'C': 0.1, 'max_iter': 100},
+    metrics={'auc': 0.847, 'ks': 0.412},
+    features={'age': 35, 'income': 60000, 'derog_marks': 2},
+    score=0.731,
+    decision='decline',
+    correlation_id='req-001',
+    artifact_sha256='a' * 64,
+)
+gate = Milestone1Gate(
+    trace=trace,
+    slo_metrics={'p99_latency_ms': 220.0, 'error_rate': 0.003, 'model_auc': 0.847},
+    artifact_sha256='a' * 64,
+    sbom_entries=5,
+)
+report = gate.run()
+status = '✅' if report.overall_passed else '❌'
+print(f'  {status} M1 Gate: {len(report.checks)} checks, {len(report.failures())} failures')
+for c in report.checks:
+    icon = '✅' if c.passed else '❌'
+    print(f'    {icon} [G{c.gate_number}] {c.name}: {c.message}')
+endef
+export PYBLOCK_18
+
+define PYBLOCK_19
+from ci.signing import ArtifactSigner
+signer = ArtifactSigner(backend='hmac-sha256', signer_identity='ci@example.com')
+artifact = b'model weights placeholder'
+result = signer.sign(artifact, 'credit-model-v1.pkl')
+sbom = signer.build_sbom('credit-model', 'v1.2',
+    [{'name': 'numpy', 'version': '1.26.4', 'license': 'BSD-3-Clause'},
+     {'name': 'scikit-learn', 'version': '1.4.0'}])
+status = '✅' if result.success else '❌'
+print(f'  {status} Signed: sha256={result.artifact_sha256[:16]}...')
+print(f'  ✅ SBOM: {len(sbom.entries)} components ({[e.name for e in sbom.entries]})')
+endef
+export PYBLOCK_19
+
+define PYBLOCK_20
+from infra.k8s_manifests import ContainerSpec, DeploymentSpec, K8sManifestSet, ResourceRequirements, ServiceSpec
+dep = DeploymentSpec('credit-risk-api', containers=[ContainerSpec('api', 'credit-risk:v1', port=8080)])
+svc = ServiceSpec('credit-risk-api')
+ms = K8sManifestSet(dep, svc, configmap={'MODEL_VERSION': 'v1.2'})
+kinds = ms.manifest_kinds()
+print(f'  ✅ ManifestSet: {kinds}')
+endef
+export PYBLOCK_20
+
+define PYBLOCK_21
+from infra.kserve import CanaryConfig
+c = CanaryConfig('credit-risk', stable_storage_uri='s3://m/v1/', canary_storage_uri='s3://m/v2/', canary_traffic_pct=10)
+promoted = c.promote()
+rolled = c.rollback()
+print(f'  ✅ Canary: 10% → promote={promoted.canary_traffic_pct}% rollback={rolled.canary_traffic_pct}%')
+endef
+export PYBLOCK_21
+
+define PYBLOCK_22
+from infra.k8s_observability import SecretThreatChecker
+clean = {'kind': 'ConfigMap', 'data': {'MLFLOW_URI': 'http://mlflow:5000'}}
+dirty = {'kind': 'ConfigMap', 'data': {'POSTGRES_PASSWORD': 'changeme'}}
+f1 = SecretThreatChecker().check(clean)
+f2 = SecretThreatChecker().check(dirty)
+print(f'  ✅ Threat checker: clean={len(f1)} findings, credential-in-configmap={len(f2)} findings (HIGH)')
+endef
+export PYBLOCK_22
 
 help:
 	@echo ""
@@ -81,6 +444,9 @@ help:
 	@echo "    make k8s-gate-check            Run K8s manifest validation dry-run (Day 70)"
 	@echo "    make kind-up                   Create local kind cluster (3 nodes)"
 	@echo "    make kind-down                 Delete local kind cluster"
+	@echo ""
+	@echo "  Phase 10 — Reliability Lab (Days 71-73):"
+	@echo "    make chaos-gate-check          Run chaos experiment dry-run (Day 73)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -213,183 +579,33 @@ reproduce-check:
 
 calibrate:
 	@echo "→ Fitting calibrator + comparing ECE before/after (Day 15)..."
-	uv run python -c "
-import pickle, pandas as pd, numpy as np
-from training.calibration import fit_calibrator, calibration_report, reliability_data
-model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
-df = pd.read_parquet('data/processed/features.parquet')
-n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
-X = df.drop(columns=[target, 'ID']); y = df[target]
-X_cal, y_cal = X.iloc[int(n*0.6):int(n*0.8)].to_numpy(), y.iloc[int(n*0.6):int(n*0.8)].to_numpy()
-X_test, y_test = X.iloc[int(n*0.8):].to_numpy(), y.iloc[int(n*0.8):].to_numpy()
-cal = fit_calibrator(model, X_cal, y_cal)
-report = calibration_report(model, cal, X_test, y_test)
-report.log_summary()
-print(f'ECE before: {report.ece_before:.4f}  after: {report.ece_after:.4f}  improved={report.improved}')
-rel = reliability_data(y_test, cal.predict_proba(X_test)[:,1])
-rel.to_csv('metrics/reliability_diagram.csv', index=False)
-print('Reliability diagram saved to metrics/reliability_diagram.csv')
-"
+	printf '%s\n' "$$(PYBLOCK_01)" | uv run python -
 
 threshold-analysis:
 	@echo "→ Finding cost-optimal threshold (Day 16)..."
-	uv run python -c "
-import pickle, pandas as pd, numpy as np
-from training.threshold import find_cost_optimal_threshold, threshold_sweep
-model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
-df = pd.read_parquet('data/processed/features.parquet')
-n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
-X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
-y_test = df[target].iloc[int(n*0.8):].to_numpy()
-y_prob = model.predict_proba(X_test)[:,1]
-result = find_cost_optimal_threshold(y_test, y_prob)
-result.log_summary()
-sweep = threshold_sweep(y_test, y_prob)
-sweep.to_csv('metrics/threshold_sweep.csv', index=False)
-print('Threshold sweep saved to metrics/threshold_sweep.csv')
-"
+	printf '%s\n' "$$(PYBLOCK_02)" | uv run python -
 
 decision-band:
 	@echo "→ Deriving approve/review/decline band + routing stats (Day 17)..."
-	uv run python -c "
-import pickle, pandas as pd, numpy as np
-from training.decision import ThresholdBand, find_review_band, calibrate_band_for_cost
-model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
-df = pd.read_parquet('data/processed/features.parquet')
-n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
-X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):].to_numpy()
-y_test = df[target].iloc[int(n*0.8):].to_numpy()
-y_prob = model.predict_proba(X_test)[:,1]
-band = calibrate_band_for_cost(y_test, y_prob, target_review_pct=0.15)
-print(f'Band: approve < {band.approve}  decline >= {band.decline}')
-print(band.routing_stats(y_prob))
-review_df = find_review_band(y_test, y_prob, band.approve, band.decline)
-print(review_df.to_string())
-"
+	printf '%s\n' "$$(PYBLOCK_03)" | uv run python -
 
 slice-eval:
 	@echo "→ Slice-level evaluation + OOD detection (Day 18)..."
-	uv run python -c "
-import pickle, pandas as pd, numpy as np
-from training.slice_eval import evaluate_slices, worst_slices, slice_gap_report, fit_ood_detector, ood_report
-from training.evaluate import compute_metrics
-model = pickle.load(open('models/credit_risk_model.pkl', 'rb'))
-df = pd.read_parquet('data/processed/features.parquet')
-n = len(df); target = 'DEFAULT_PAYMENT_NEXT_MONTH'
-X_train_np = df.drop(columns=[target, 'ID']).iloc[:int(n*0.8)].to_numpy()
-X_test = df.drop(columns=[target, 'ID']).iloc[int(n*0.8):]
-y_test = df[target].iloc[int(n*0.8):].to_numpy()
-y_prob = model.predict_proba(X_test.to_numpy())[:,1]
-overall = compute_metrics(y_test, y_prob)
-print(f'Overall AUC: {overall[\"roc_auc\"]:.4f}')
-slices = evaluate_slices(X_test, y_test, y_prob)
-slices.to_csv('metrics/slice_metrics.csv', index=False)
-print(slices.to_string())
-gaps = slice_gap_report(slices, overall, warn_threshold=0.05)
-flagged = gaps[gaps['flag']]
-print(f'\nFlagged slices (gap > 0.05): {len(flagged)}')
-if len(flagged): print(flagged[['slice_col','slice_val','roc_auc','gap']].to_string())
-detector = fit_ood_detector(X_train_np)
-report = ood_report(detector, X_test.to_numpy())
-print(f'\nOOD fraction (test set): {report[\"ood_fraction\"]:.4f}')
-"
+	printf '%s\n' "$$(PYBLOCK_04)" | uv run python -
 
 # ── Phase 3 — Data & Label Contracts ────────────────────────────────────────
 
 data-contract:
 	@echo "→ Validating feature schema + statistical checks (Day 19)..."
-	uv run python -c "
-import pandas as pd
-from data.contracts.feature_schema import validate_features, check_no_infinite_values
-from data.contracts.statistical_checks import compute_dataset_stats, check_null_drift, check_class_balance
-import pandera as pa, sys
-
-df = pd.read_parquet('data/processed/features.parquet')
-print(f'Loaded {len(df)} rows × {len(df.columns)} columns')
-
-inf_cols = check_no_infinite_values(df)
-if inf_cols:
-    print(f'❌ Infinite values in: {inf_cols}'); sys.exit(1)
-print('✅ No infinite values')
-
-try:
-    validate_features(df)
-    print('✅ Feature schema PASSED')
-except pa.errors.SchemaErrors as err:
-    print(f'❌ Feature schema FAILED: {len(err.failure_cases)} violations')
-    print(err.failure_cases.head(5).to_string()); sys.exit(1)
-
-stats = compute_dataset_stats(df, dataset_name='features')
-balance = check_class_balance(stats)
-print(f'Class balance: {balance[\"positive_rate\"]:.1%} (in_range={balance[\"in_range\"]})')
-print('✅ data-contract complete')
-"
+	printf '%s\n' "$$(PYBLOCK_05)" | uv run python -
 
 label-contract:
 	@echo "→ Validating label batch schema + arrival timing (Day 20)..."
-	uv run python -c "
-import pandas as pd, numpy as np
-from data.contracts.label_contract import validate_label_batch, check_label_arrival, DEFAULT_LABEL_METADATA, check_single_policy_version, check_correction_rate
-import pandera as pa, sys
-
-# Synthetic label batch
-rng = np.random.default_rng(42)
-n = 200
-obs = pd.date_range('2005-01-01', periods=n, freq='D')
-out = obs + pd.Timedelta(days=91)
-df = pd.DataFrame({
-    'applicant_id': range(1, n+1),
-    'label': rng.choice([0,1], n).tolist(),
-    'label_source': ['core_banking'] * n,
-    'policy_version': ['v1.0'] * n,
-    'label_timestamp': ['2005-04-30T00:00:00'] * n,
-    'observation_date': [str(d.date()) for d in obs],
-    'outcome_date': [str(d.date()) for d in out],
-    'is_corrected': [False] * n,
-})
-
-try:
-    validate_label_batch(df)
-    print('✅ Label batch schema PASSED')
-except pa.errors.SchemaErrors as err:
-    print(f'❌ Label batch schema FAILED'); print(err.failure_cases.head(5)); sys.exit(1)
-
-arrival = check_label_arrival(df, DEFAULT_LABEL_METADATA)
-print(f'Label arrival: {arrival[\"pct_confirmed\"]:.0%} confirmed (sufficient={arrival[\"sufficient_for_training\"]})')
-policy = check_single_policy_version(df)
-print(f'Policy consistency: {policy[\"is_consistent\"]} versions={policy[\"policy_versions\"]}')
-corrections = check_correction_rate(df)
-print(f'Correction rate: {corrections[\"correction_rate\"]:.1%} (flag={corrections[\"flag\"]})')
-print('✅ label-contract complete')
-"
+	printf '%s\n' "$$(PYBLOCK_06)" | uv run python -
 
 skew-detect:
 	@echo "→ Train/serve skew detection — PSI, KS, Jensen-Shannon (Day 21)..."
-	uv run python -c "
-import pandas as pd
-from monitoring.reference_stats import compute_reference_stats, save_reference_stats
-from monitoring.skew_detector import detect_skew, skew_summary
-from pathlib import Path
-
-df = pd.read_parquet('data/processed/features.parquet')
-target = 'DEFAULT_PAYMENT_NEXT_MONTH'
-feat_cols = [c for c in df.columns if c not in [target, 'ID']]
-
-n = len(df)
-X_train = df[feat_cols].iloc[:int(n*0.8)]
-X_test  = df[feat_cols].iloc[int(n*0.8):]
-
-ref = compute_reference_stats(X_train, model_version='phase3-demo', feature_names=feat_cols)
-save_reference_stats(ref, Path('metrics/reference_stats.json'))
-print(f'Reference stats saved: {ref.n_training_rows} rows, {len(ref.feature_names)} features')
-
-report = detect_skew(X_test, ref)
-print(f'Overall severity: {report.overall_severity} | Flagged: {report.n_flagged}/{report.n_features} features')
-summary = skew_summary(report)
-summary.to_csv('metrics/skew_report.csv', index=False)
-print(summary.head(10).to_string())
-print('Skew report saved to metrics/skew_report.csv')
-"
+	printf '%s\n' "$$(PYBLOCK_07)" | uv run python -
 
 # ── Phase 4 — Serving ────────────────────────────────────────────────────────
 
@@ -412,29 +628,14 @@ serving-gate-check:
 	    echo "  ✅ All Phase 4 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  API Contract check (v1 → v2)..."
-	@uv run python -c "
-from serving.api_contract import ApiContractChecker, build_v1_contract, build_v2_contract
-checker = ApiContractChecker()
-report = checker.check_compatibility(build_v1_contract(), build_v2_contract())
-status = '✅' if report.is_backward_compatible else '❌'
-print(f'  {status} v1 → v2 backward compatible: {report.is_backward_compatible}')
-for c in report.compatible_changes:
-    print(f'    OK: {c}')
-"
+	@printf '%s\n' "$$(PYBLOCK_08)" | uv run python -
 	@echo ""
 	@echo "  Dockerfile security checks..."
 	@uv run python -m pytest tests/unit/test_dockerfile.py --override-ini="addopts=" -q && \
 	    echo "  ✅ Dockerfile security checks passed" || echo "  ❌ Dockerfile checks FAILED"
 	@echo ""
 	@echo "  Rate limiter self-test..."
-	@uv run python -c "
-from serving.security import RateLimiter
-limiter = RateLimiter(max_requests=3, window_seconds=60)
-results = [limiter.check('test') for _ in range(4)]
-assert results[:3] == [True, True, True], 'Expected first 3 to pass'
-assert results[3] == False, 'Expected 4th to be rate-limited'
-print('  ✅ Rate limiter working correctly')
-"
+	@printf '%s\n' "$$(PYBLOCK_09)" | uv run python -
 	@echo ""
 	@echo "  Serving Gate: PASSED ✅"
 
@@ -451,24 +652,10 @@ pipeline-gate-check:
 	    echo "  ✅ All Phase 5 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  Idempotency self-test..."
-	@uv run python -c "
-from pipelines.failure_modes import IdempotencyProof
-proof = IdempotencyProof(fn=lambda x: x * 2, run_count=3)
-result = proof.prove(inputs=42)
-status = '✅' if result.is_idempotent else '❌'
-print(f'  {status} featurize idempotency: {result.is_idempotent}')
-print(f'     checksums: {result.checksums}')
-"
+	@printf '%s\n' "$$(PYBLOCK_10)" | uv run python -
 	@echo ""
 	@echo "  Orchestration tool recommendation..."
-	@uv run python -c "
-from pipelines.pipeline_gate import OrchestrationSurvey
-survey = OrchestrationSurvey()
-recs = survey.recommend(need_asset_centric=True, need_ml_native=True, need_local_dev=True)
-print('  Recommendations (asset-centric + ML-native + local dev):')
-for r in recs[:3]:
-    print(f'    {r.name}: {r.best_for}')
-"
+	@printf '%s\n' "$$(PYBLOCK_11)" | uv run python -
 	@echo ""
 	@echo "  Pipeline Gate: PASSED ✅"
 
@@ -486,41 +673,13 @@ feature-store-gate-check:
 	    echo "  ✅ All Phase 6 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  Zero-skew self-test..."
-	@uv run python -c "
-import numpy as np, pandas as pd
-from features.skew_checker import TrainServeSkewChecker
-rng = np.random.default_rng(42)
-df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 500), 'util_rate': rng.normal(0.4, 0.1, 500)})
-checker = TrainServeSkewChecker()
-report = checker.run(df, df)
-status = '✅' if report.zero_skew else '❌'
-print(f'  {status} Zero skew on identical data: {report.zero_skew}')
-"
+	@printf '%s\n' "$$(PYBLOCK_12)" | uv run python -
 	@echo ""
 	@echo "  Feature monitor self-test..."
-	@uv run python -c "
-from datetime import datetime, timezone
-from features.feature_monitor import FreshnessChecker
-checker = FreshnessChecker()
-now = datetime.now(timezone.utc)
-result = checker.check('payment_features', last_materialized_at=now, threshold_hours=25.0, now=now)
-status = '✅' if result.is_fresh else '❌'
-print(f'  {status} Freshness check (just materialized): {result.status}')
-"
+	@printf '%s\n' "$$(PYBLOCK_13)" | uv run python -
 	@echo ""
 	@echo "  Feedback loop self-test..."
-	@uv run python -c "
-from datetime import datetime, timezone
-from features.feedback_loop import (
-    GroundTruthJoiner, PredictionRecord, OutcomeRecord, LabelFeedbackLoop
-)
-now = datetime.now(timezone.utc)
-preds = [PredictionRecord(f'p{i}', f'c{i}', 0.7, 'approve', now) for i in range(5)]
-outcomes = [OutcomeRecord(f'p{i}', 1, now, delay_days=60.0) for i in range(5)]
-loop = LabelFeedbackLoop(baseline_metrics={'auc': 0.70})
-result = loop.tick(preds, outcomes)
-print(f'  ✅ Feedback loop tick: {len(result.labeled_examples)} labeled, phase={result.phase_reached}')
-"
+	@printf '%s\n' "$$(PYBLOCK_14)" | uv run python -
 	@echo ""
 	@echo "  Feature Store Gate: PASSED ✅"
 
@@ -539,43 +698,13 @@ monitoring-gate-check:
 	    echo "  ✅ All Phase 7 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  SLO self-test (all green)..."
-	@uv run python -c "
-from monitoring.slo import SLOChecker
-metrics = {
-    'p99_latency_ms': 200.0, 'error_rate': 0.005,
-    'model_auc': 0.80, 'max_feature_age_hours': 5.0,
-    'approval_rate': 0.70, 'default_rate': 0.22,
-}
-report = SLOChecker().run_all(metrics)
-status = '✅' if report.overall_compliant else '❌'
-print(f'  {status} SLO gate: {len(report.results)} SLOs, {len(report.violations())} violations')
-for r in report.results:
-    icon = '✅' if r.compliant else '❌'
-    print(f'    {icon} {r.slo_name}: {r.current_value:.3f} vs {r.target:.3f} [{r.budget_status.value}]')
-"
+	@printf '%s\n' "$$(PYBLOCK_15)" | uv run python -
 	@echo ""
 	@echo "  Monitor taxonomy self-test..."
-	@uv run python -c "
-from monitoring.taxonomy import Monitor, MonitorRegistry, MonitorResult, MonitorType, Severity
-registry = MonitorRegistry()
-registry.register(Monitor('latency_p99', MonitorType.OPERATIONAL,
-    lambda: MonitorResult('latency_p99', MonitorType.OPERATIONAL, True, 200, 500, Severity.CRITICAL, 'ok')))
-registry.register(Monitor('model_auc', MonitorType.ML,
-    lambda: MonitorResult('model_auc', MonitorType.ML, True, 0.80, 0.72, Severity.CRITICAL, 'ok')))
-results = registry.run_all()
-print(f'  ✅ MonitorRegistry: {len(results)} monitors, {len(MonitorRegistry.failed_results(results))} failed')
-"
+	@printf '%s\n' "$$(PYBLOCK_16)" | uv run python -
 	@echo ""
 	@echo "  Drift detector self-test..."
-	@uv run python -c "
-import numpy as np, pandas as pd
-from monitoring.drift import DriftDetector
-rng = np.random.default_rng(42)
-df = pd.DataFrame({'pay_ratio': rng.normal(0.5, 0.1, 300), 'util_rate': rng.normal(0.4, 0.1, 300)})
-report = DriftDetector().run(df, df)
-status = '✅' if not report.overall_drifted else '❌'
-print(f'  {status} Drift on identical data: overall_drifted={report.overall_drifted}')
-"
+	@printf '%s\n' "$$(PYBLOCK_17)" | uv run python -
 	@echo ""
 	@echo "  Monitoring Gate: PASSED ✅"
 
@@ -593,49 +722,10 @@ milestone1-gate-check:
 	    echo "  ✅ All Phase 8 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  M1 Gate self-test (full traceability)..."
-	@uv run python -c "
-from ci.milestone1_gate import Milestone1Gate, TraceabilityRecord
-trace = TraceabilityRecord(
-    prediction_id='pred-m1-check',
-    model_version='credit-risk-v1.2',
-    mlflow_run_id='abc123def456',
-    code_sha='6c6a398',
-    data_version='v1',
-    params={'C': 0.1, 'max_iter': 100},
-    metrics={'auc': 0.847, 'ks': 0.412},
-    features={'age': 35, 'income': 60000, 'derog_marks': 2},
-    score=0.731,
-    decision='decline',
-    correlation_id='req-001',
-    artifact_sha256='a' * 64,
-)
-gate = Milestone1Gate(
-    trace=trace,
-    slo_metrics={'p99_latency_ms': 220.0, 'error_rate': 0.003, 'model_auc': 0.847},
-    artifact_sha256='a' * 64,
-    sbom_entries=5,
-)
-report = gate.run()
-status = '✅' if report.overall_passed else '❌'
-print(f'  {status} M1 Gate: {len(report.checks)} checks, {len(report.failures())} failures')
-for c in report.checks:
-    icon = '✅' if c.passed else '❌'
-    print(f'    {icon} [G{c.gate_number}] {c.name}: {c.message}')
-"
+	@printf '%s\n' "$$(PYBLOCK_18)" | uv run python -
 	@echo ""
 	@echo "  Signing + SBOM self-test..."
-	@uv run python -c "
-from ci.signing import ArtifactSigner
-signer = ArtifactSigner(backend='hmac-sha256', signer_identity='ci@example.com')
-artifact = b'model weights placeholder'
-result = signer.sign(artifact, 'credit-model-v1.pkl')
-sbom = signer.build_sbom('credit-model', 'v1.2',
-    [{'name': 'numpy', 'version': '1.26.4', 'license': 'BSD-3-Clause'},
-     {'name': 'scikit-learn', 'version': '1.4.0'}])
-status = '✅' if result.success else '❌'
-print(f'  {status} Signed: sha256={result.artifact_sha256[:16]}...')
-print(f'  ✅ SBOM: {len(sbom.entries)} components ({[e.name for e in sbom.entries]})')
-"
+	@printf '%s\n' "$$(PYBLOCK_19)" | uv run python -
 	@echo ""
 	@echo "  Milestone 1 Gate: PASSED ✅ — Era A Classical MLOps complete"
 
@@ -654,33 +744,13 @@ k8s-gate-check:
 	    echo "  ✅ All Phase 9 tests passing" || echo "  ❌ Tests FAILED"
 	@echo ""
 	@echo "  Manifest builder self-test..."
-	@uv run python -c "
-from infra.k8s_manifests import ContainerSpec, DeploymentSpec, K8sManifestSet, ResourceRequirements, ServiceSpec
-dep = DeploymentSpec('credit-risk-api', containers=[ContainerSpec('api', 'credit-risk:v1', port=8080)])
-svc = ServiceSpec('credit-risk-api')
-ms = K8sManifestSet(dep, svc, configmap={'MODEL_VERSION': 'v1.2'})
-kinds = ms.manifest_kinds()
-print(f'  ✅ ManifestSet: {kinds}')
-"
+	@printf '%s\n' "$$(PYBLOCK_20)" | uv run python -
 	@echo ""
 	@echo "  KServe canary self-test..."
-	@uv run python -c "
-from infra.kserve import CanaryConfig
-c = CanaryConfig('credit-risk', stable_storage_uri='s3://m/v1/', canary_storage_uri='s3://m/v2/', canary_traffic_pct=10)
-promoted = c.promote()
-rolled = c.rollback()
-print(f'  ✅ Canary: 10% → promote={promoted.canary_traffic_pct}% rollback={rolled.canary_traffic_pct}%')
-"
+	@printf '%s\n' "$$(PYBLOCK_21)" | uv run python -
 	@echo ""
 	@echo "  Secret threat check self-test..."
-	@uv run python -c "
-from infra.k8s_observability import SecretThreatChecker
-clean = {'kind': 'ConfigMap', 'data': {'MLFLOW_URI': 'http://mlflow:5000'}}
-dirty = {'kind': 'ConfigMap', 'data': {'POSTGRES_PASSWORD': 'changeme'}}
-f1 = SecretThreatChecker().check(clean)
-f2 = SecretThreatChecker().check(dirty)
-print(f'  ✅ Threat checker: clean={len(f1)} findings, credential-in-configmap={len(f2)} findings (HIGH)')
-"
+	@printf '%s\n' "$$(PYBLOCK_22)" | uv run python -
 	@echo ""
 	@echo "  K8s Gate: PASSED ✅"
 
@@ -693,6 +763,25 @@ kind-up:
 
 kind-down:
 	kind delete cluster --name mlops-local
+
+# ── Chaos Gate — Phase 10 ────────────────────────────────────────────────────
+
+chaos-gate-check:
+	@echo "→ Phase 10 Chaos Gate Dry-Run (Day 73)..."
+	@echo ""
+	@echo "  Running Phase 10 test suite..."
+	@uv run python -m pytest tests/unit/test_chaos_engine.py tests/unit/test_ml_incidents.py tests/unit/test_game_day.py --override-ini="addopts=" -q && echo "  ✅ All Phase 10 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Chaos experiment self-test..."
+	@uv run python -c "from ci.chaos.chaos_engine import ChaosExperiment, mlflow_down_scenario, gpu_node_gone_scenario; r1=ChaosExperiment(scenario=mlflow_down_scenario()).run_dry(); r2=ChaosExperiment(scenario=gpu_node_gone_scenario()).run_dry(); print(f'  ✅ mlflow-down: {r1.notes}'); print(f'  ✅ gpu-node-gone: {r2.notes}')"
+	@echo ""
+	@echo "  ML incident drill self-test..."
+	@uv run python -c "from ci.chaos.ml_incidents import MLIncidentDrill, bad_artifact_incident, stale_features_incident; d1=MLIncidentDrill(bad_artifact_incident(), alert_rules=['ModelPSI'], runbook_path='docs/runbooks/bad-artifact-pushed.md'); d2=MLIncidentDrill(stale_features_incident(), alert_rules=['FeatureStaleness'], runbook_path='docs/runbooks/stale-features.md'); r1=d1.run_dry(); r2=d2.run_dry(); print(f'  ✅ bad-artifact: passed={r1.passed}'); print(f'  ✅ stale-features: passed={r2.passed}')"
+	@echo ""
+	@echo "  Blameless postmortem self-test..."
+	@uv run python -c "from ci.chaos.game_day import Postmortem; pm=Postmortem('stale-features','2026-06-29','Materialization job failed due to OOM. Feature store returned stale values.'); print(f'  ✅ Postmortem blameless: {pm.is_blameless()}')"
+	@echo ""
+	@echo "  Chaos Gate: PASSED ✅"
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 

@@ -903,16 +903,65 @@ uv run pytest tests/unit/test_k8s_manifests.py tests/unit/test_ingress.py \
 
 ---
 
-## Phase 10 — Reliability Lab: Failure Injection (Days 71–73)
-**Tag:** `phase10` *(pending)*
+## Phase 10 — Reliability Lab: Failure Injection (Days 71–73) ✅
+**Tag:** `phase10`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 71 | Chaos Fundamentals + Infra Failures | [day71_chaos_infra.md](docs/phase10/day71_chaos_infra.md) | `ci/chaos/` — MLflow down, MinIO down, KServe stuck, GPU node gone | ☐ |
-| 72 | ML-Specific Incident Drills | [day72_ml_incidents.md](docs/phase10/day72_ml_incidents.md) | Runbooks: bad artifact pushed, stale features, broken retriever | ☐ |
-| 73 | Game Day + Runbooks + Postmortems | [day73_game_day.md](docs/phase10/day73_game_day.md) | `docs/runbooks/` — per-incident runbook templates + postmortem format | ☐ |
+| 71 | Chaos Fundamentals + Infra Failures | [day71_chaos_infra.md](docs/phase10/day71_chaos_infra.md) | `ci/chaos/chaos_engine.py` — 5 pre-built ML infra scenarios | ✅ |
+| 72 | ML-Specific Incident Drills | [day72_ml_incidents.md](docs/phase10/day72_ml_incidents.md) | `ci/chaos/ml_incidents.py` + 3 runbooks | ✅ |
+| 73 | Game Day + Runbooks + Postmortems | [day73_game_day.md](docs/phase10/day73_game_day.md) | `ci/chaos/game_day.py` — Runbook, Postmortem, GameDay | ✅ |
+
+### Code Modules
+
+| Module | Key Classes | Description |
+|---|---|---|
+| `ci/chaos/chaos_engine.py` | `ChaosScenario`, `ChaosExperiment`, `ChaosResult`, `FailureType` | Chaos scenario definition + dry-run validation + hypothesis checking |
+| `ci/chaos/ml_incidents.py` | `MLIncident`, `MLIncidentDrill`, `IncidentDrillResult`, `IncidentCategory` | 3 ML-specific incident definitions with detection/recovery/prevention |
+| `ci/chaos/game_day.py` | `GameDay`, `GameDayReport`, `Runbook`, `Postmortem`, `ActionItem` | Full game day orchestration + runbook completeness check + blameless PM |
+
+### Pre-built Scenarios & Incidents
+
+| Name | Category | Detection Signal |
+|---|---|---|
+| `mlflow-down` | `PROCESS_KILL` | experiment not logged; AUC SLO unaffected |
+| `minio-down` | `PROCESS_KILL` | new pod init-container fails; serving continues |
+| `kserve-crashloop` | `BAD_ARTIFACT` | readiness probe fails; rolling update keeps traffic |
+| `gpu-node-gone` | `NODE_DRAIN` | Kueue queues jobs; Karpenter provisions replacement |
+| `queue-backlog` | `RESOURCE_EXHAUST` | KEDA queue depth alert fires |
+| `bad-artifact-pushed` | `BAD_ARTIFACT` | `model_prediction_psi_score > 0.2 for 5m` |
+| `stale-features` | `STALE_DATA` | `feature_freshness_lag_s > 3600 for 10m` |
+| `broken-retriever` | `BROKEN_DEPENDENCY` | `retrieval_empty_rate > 0.05 for 5m` |
+
+### Test Coverage
+
+| Test File | Tests |
+|---|---|
+| `tests/unit/test_chaos_engine.py` | 27 |
+| `tests/unit/test_ml_incidents.py` | 22 |
+| `tests/unit/test_game_day.py` | 31 |
+| **Total** | **80** |
+
+### Quick Start
+
+```bash
+make chaos-gate-check
+
+# Run Phase 10 unit tests directly
+uv run pytest tests/unit/test_chaos_engine.py tests/unit/test_ml_incidents.py \
+    tests/unit/test_game_day.py -v
+```
+
+### Key Concepts
+
+- **Steady state first** — define SLI metrics BEFORE injecting failure; hypothesis = expected system behavior
+- **Blast radius** — classify each scenario as low/medium/high; never run `high` without full rollback plan
+- **ML incidents are silent** — PSI spike or feature staleness doesn't throw HTTP 5xx; requires explicit monitoring
+- **Blameless postmortems** — root cause = system conditions, not people; `is_blameless()` detects blame phrases
+- **Runbook completeness** — `is_complete()` checks immediate_steps + recovery_steps + escalation_criteria all non-empty
+- **Game day debrief** — `GameDayReport.runbook_gaps` surfaces incomplete runbooks before real incidents happen
 
 ---
 

@@ -6,4 +6,9 @@ Phase 8 (Days 54–58):
   ci/gitlab_pipeline.py — CacheConfig, ArtifactConfig, GitLabJob, GitLabPipeline
   ci/signing.py         — SBOMEntry, SBOMDocument, ArtifactProvenanceRecord, ArtifactSigner
   ci/milestone1_gate.py — TraceabilityRecord, GateCheck, GateReport, Milestone1Gate
+
+Phase 10 (Days 71–73):
+  ci/chaos/chaos_engine.py — FailureType, ChaosScenario, ChaosResult, ChaosExperiment
+  ci/chaos/ml_incidents.py — IncidentCategory, MLIncident, IncidentDrillResult, MLIncidentDrill
+  ci/chaos/game_day.py     — Runbook, Postmortem, ActionItem, GameDayReport, GameDay
 """
