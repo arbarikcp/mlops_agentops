@@ -18,6 +18,7 @@ SEED = 42
         k8s-gate-check \
         chaos-gate-check \
         gitops-gate-check \
+        milestone2-gate-check \
         kind-up kind-down
 
 define PYBLOCK_01
