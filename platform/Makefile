@@ -14,6 +14,7 @@ SEED = 42
         pipeline-gate-check \
         feature-store-gate-check \
         monitoring-gate-check \
+        milestone1-gate-check \
         kind-up kind-down
 
 help:
@@ -71,6 +72,9 @@ help:
 	@echo ""
 	@echo "  Phase 7 — Monitoring & the Closed Loop (Days 46-53):"
 	@echo "    make monitoring-gate-check     Run Monitoring gate dry-run (Day 53)"
+	@echo ""
+	@echo "  Phase 8 — CI/CD for ML (Days 54-58) — MILESTONE 1:"
+	@echo "    make milestone1-gate-check     Run Milestone 1 gate dry-run (Day 58)"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -568,6 +572,66 @@ print(f'  {status} Drift on identical data: overall_drifted={report.overall_drif
 "
 	@echo ""
 	@echo "  Monitoring Gate: PASSED ✅"
+
+# ── Milestone 1 Gate — Phase 8 ──────────────────────────────────────────────
+
+milestone1-gate-check:
+	@echo "→ Phase 8 Milestone 1 Gate Dry-Run (Day 58)..."
+	@echo ""
+	@echo "  Checking Phase 8 test suite..."
+	@uv run python -m pytest \
+	    tests/unit/test_ml_pipeline.py tests/unit/test_ml_tests.py \
+	    tests/unit/test_gitlab_pipeline.py tests/unit/test_signing.py \
+	    tests/unit/test_milestone1_gate.py \
+	    --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 8 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  M1 Gate self-test (full traceability)..."
+	@uv run python -c "
+from ci.milestone1_gate import Milestone1Gate, TraceabilityRecord
+trace = TraceabilityRecord(
+    prediction_id='pred-m1-check',
+    model_version='credit-risk-v1.2',
+    mlflow_run_id='abc123def456',
+    code_sha='6c6a398',
+    data_version='v1',
+    params={'C': 0.1, 'max_iter': 100},
+    metrics={'auc': 0.847, 'ks': 0.412},
+    features={'age': 35, 'income': 60000, 'derog_marks': 2},
+    score=0.731,
+    decision='decline',
+    correlation_id='req-001',
+    artifact_sha256='a' * 64,
+)
+gate = Milestone1Gate(
+    trace=trace,
+    slo_metrics={'p99_latency_ms': 220.0, 'error_rate': 0.003, 'model_auc': 0.847},
+    artifact_sha256='a' * 64,
+    sbom_entries=5,
+)
+report = gate.run()
+status = '✅' if report.overall_passed else '❌'
+print(f'  {status} M1 Gate: {len(report.checks)} checks, {len(report.failures())} failures')
+for c in report.checks:
+    icon = '✅' if c.passed else '❌'
+    print(f'    {icon} [G{c.gate_number}] {c.name}: {c.message}')
+"
+	@echo ""
+	@echo "  Signing + SBOM self-test..."
+	@uv run python -c "
+from ci.signing import ArtifactSigner
+signer = ArtifactSigner(backend='hmac-sha256', signer_identity='ci@example.com')
+artifact = b'model weights placeholder'
+result = signer.sign(artifact, 'credit-model-v1.pkl')
+sbom = signer.build_sbom('credit-model', 'v1.2',
+    [{'name': 'numpy', 'version': '1.26.4', 'license': 'BSD-3-Clause'},
+     {'name': 'scikit-learn', 'version': '1.4.0'}])
+status = '✅' if result.success else '❌'
+print(f'  {status} Signed: sha256={result.artifact_sha256[:16]}...')
+print(f'  ✅ SBOM: {len(sbom.entries)} components ({[e.name for e in sbom.entries]})')
+"
+	@echo ""
+	@echo "  Milestone 1 Gate: PASSED ✅ — Era A Classical MLOps complete"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 

@@ -768,20 +768,62 @@ uv run pytest tests/unit/test_taxonomy.py tests/unit/test_drift.py \
 
 ---
 
-## Phase 8 — CI/CD for ML (Days 54–58) → MILESTONE 1 GATE
-**Tag:** `phase8` *(pending)*
+## Phase 8 — CI/CD for ML (Days 54–58) → MILESTONE 1 GATE ✅
+**Tag:** `phase8`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 54 | CI/CD for ML | [day54_cicd_for_ml.md](docs/phase8/day54_cicd_for_ml.md) | ML testing pyramid doc; code + data + model CI explained | ☐ |
-| 55 | Testing ML Code | [day55_testing_ml.md](docs/phase8/day55_testing_ml.md) | `ci/tests/` — unit, data, behavioral, training smoke tests | ☐ |
-| 56 | GitLab CI Pipelines | [day56_gitlab_ci.md](docs/phase8/day56_gitlab_ci.md) | `.gitlab-ci.yml` — stages, runners, caching, artifact upload | ☐ |
-| 57 | Automated Build + CD + SBOM | [day57_cd_signing.md](docs/phase8/day57_cd_signing.md) | `ci/sign.py` — Sigstore signing, SBOM generation, rollback gate | ☐ |
-| 58 | Consolidation + M1 Gate | [day58_milestone1_gate.md](docs/phase8/day58_milestone1_gate.md) | **MILESTONE 1 GATE** — all 4 gates green | ☐ |
+| 54 | CI/CD for ML | [day54_cicd_for_ml.md](docs/phase8/day54_cicd_for_ml.md) | `ci/ml_pipeline.py` | ✅ |
+| 55 | Testing ML | [day55_ml_testing.md](docs/phase8/day55_ml_testing.md) | `ci/ml_tests.py` | ✅ |
+| 56 | GitLab CI Pipelines | [day56_gitlab_ci.md](docs/phase8/day56_gitlab_ci.md) | `ci/gitlab_pipeline.py` | ✅ |
+| 57 | Signing + SBOM | [day57_signing_sbom.md](docs/phase8/day57_signing_sbom.md) | `ci/signing.py` | ✅ |
+| 58 | Consolidation + M1 Gate | [day58_milestone1_gate.md](docs/phase8/day58_milestone1_gate.md) | `ci/milestone1_gate.py` | ✅ |
 
 > **M1 Gate — you pass when:** given a prediction, you can trace the model version, data version, code version, feature values, request ID, and decision outcome — and you can roll back, retry a failed job safely, and detect drift/quality/infra/business issues separately. Threat model at **v1**.
+
+### Code Modules
+
+| Module | Key Classes | Description |
+|---|---|---|
+| `ci/ml_pipeline.py` | `MLCIPipeline`, `CIStage`, `CIResult`, `CIPipelineRun` | Three-axis orchestrator: CODE / DATA / MODEL CI with blocking + skip logic |
+| `ci/ml_tests.py` | `DataContractChecker`, `BehavioralChecker`, `SmokeTrainer`, `AUCGuard` | ML testing pyramid: schema, stats, label contract, behavioral invariants, AUC regression guard |
+| `ci/gitlab_pipeline.py` | `GitLabPipeline`, `GitLabJob`, `CacheConfig`, `ArtifactConfig` | GitLab CI YAML builder; `ml_pipeline()` factory produces canonical 7-job ML pipeline |
+| `ci/signing.py` | `ArtifactSigner`, `SBOMDocument`, `ArtifactProvenanceRecord`, `SigningResult` | HMAC-SHA256 signing (prod: cosign keyless), CycloneDX SBOM, provenance JSON |
+| `ci/milestone1_gate.py` | `Milestone1Gate`, `TraceabilityRecord`, `GateReport`, `GateCheck` | 11-check M1 gate: traceability, serving, SLO, signing, SBOM |
+
+### Test Coverage
+
+| Test File | Tests |
+|---|---|
+| `tests/unit/test_ml_pipeline.py` | 18 |
+| `tests/unit/test_ml_tests.py` | 33 |
+| `tests/unit/test_gitlab_pipeline.py` | 30 |
+| `tests/unit/test_signing.py` | 25 |
+| `tests/unit/test_milestone1_gate.py` | 26 |
+| **Total** | **132** |
+
+### Quick Start
+
+```bash
+make milestone1-gate-check
+
+uv run pytest tests/unit/test_ml_pipeline.py tests/unit/test_ml_tests.py \
+    tests/unit/test_gitlab_pipeline.py tests/unit/test_signing.py \
+    tests/unit/test_milestone1_gate.py -v
+```
+
+### Key Concepts
+
+- **ML Testing Pyramid** — Unit (transforms) → Data contract → Training smoke → Behavioral invariants → Model quality (E2E). Each layer targets a different failure mode.
+- **Three CI axes** — CODE, DATA, MODEL run independently; a blocking failure in one axis skips that axis but doesn't block others.
+- **AUC Guard** — compares current training run AUC to a stored baseline; fails if regression exceeds tolerance (default 0.01).
+- **Behavioral invariants** — monotonicity, robustness, directional, invariance, confidence — properties the model must satisfy regardless of dataset.
+- **GitLab CI `rules:`** — replaces `only:/except:`; evaluated top-down; `when: manual` = human gate for prod promote.
+- **Keyless signing** — no long-lived keys; signing cert tied to CI OIDC token (job + commit + pipeline); Rekor transparency log gives tamper evidence.
+- **SBOM** — CycloneDX format; declares every dependency in the model artifact; required for vulnerability response and compliance.
+- **M1 Traceability** — `prediction_id` → `mlflow_run_id` → `code_sha` + `data_version` + `artifact_sha256` + features (PIT-correct).
 
 ---
 
