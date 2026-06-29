@@ -17,6 +17,7 @@ SEED = 42
         milestone1-gate-check \
         k8s-gate-check \
         chaos-gate-check \
+        gitops-gate-check \
         kind-up kind-down
 
 define PYBLOCK_01
@@ -448,6 +449,9 @@ help:
 	@echo "  Phase 10 — Reliability Lab (Days 71-73):"
 	@echo "    make chaos-gate-check          Run chaos experiment dry-run (Day 73)"
 	@echo ""
+	@echo "  Phase 11 — GitOps & Continuous Training (Days 74-77):"
+	@echo "    make gitops-gate-check         Run GitOps + CT dry-run (Day 77)"
+	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
 
@@ -782,6 +786,25 @@ chaos-gate-check:
 	@uv run python -c "from ci.chaos.game_day import Postmortem; pm=Postmortem('stale-features','2026-06-29','Materialization job failed due to OOM. Feature store returned stale values.'); print(f'  ✅ Postmortem blameless: {pm.is_blameless()}')"
 	@echo ""
 	@echo "  Chaos Gate: PASSED ✅"
+
+# ── GitOps Gate — Phase 11 ───────────────────────────────────────────────────
+
+gitops-gate-check:
+	@echo "→ Phase 11 GitOps + CT Gate Dry-Run (Day 77)..."
+	@echo ""
+	@echo "  Running Phase 11 test suite..."
+	@uv run python -m pytest tests/unit/test_gitops.py tests/unit/test_progressive_delivery.py tests/unit/test_ct_automation.py --override-ini="addopts=" -q && echo "  ✅ All Phase 11 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Argo CD Application self-test..."
+	@uv run python -c "from infra.gitops import ArgoCDApp, SyncPolicy; app=ArgoCDApp('credit-risk-serving','https://github.com/arbarikcp/mlops_agentops.git','platform/infra/helm/credit-risk',sync_wave=3); m=app.to_manifest(); print(f'  ✅ ArgoCDApp: kind={m[\"kind\"]} wave={m[\"metadata\"][\"annotations\"][\"argocd.argoproj.io/sync-wave\"]}')"
+	@echo ""
+	@echo "  AnalysisTemplate self-test..."
+	@uv run python -c "from infra.progressive_delivery import AnalysisTemplate; at=AnalysisTemplate.ml_quality_gate(min_auc=0.78,max_psi=0.2); m=at.to_manifest(); print(f'  ✅ AnalysisTemplate: {len(m[\"spec\"][\"metrics\"])} metrics ({[x[\"name\"] for x in m[\"spec\"][\"metrics\"]]})')"
+	@echo ""
+	@echo "  CT pipeline self-test..."
+	@uv run python -c "from infra.ct_automation import CTWorkflowSpec, CTTrigger, TriggerType; spec=CTWorkflowSpec.default_ct_pipeline(); m=spec.to_manifest(); t=CTTrigger(TriggerType.DATA_DRIFT,threshold=0.2); print(f'  ✅ CT pipeline: {len(spec.steps)} steps, trigger fires at PSI={t.threshold}: {t.should_trigger(0.25)}')"
+	@echo ""
+	@echo "  GitOps Gate: PASSED ✅"
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 

@@ -965,17 +965,54 @@ uv run pytest tests/unit/test_chaos_engine.py tests/unit/test_ml_incidents.py \
 
 ---
 
-## Phase 11 — GitOps & Continuous Training (Days 74–77)
-**Tag:** `phase11` *(pending)*
+## Phase 11 — GitOps & Continuous Training (Days 74–77) ✅
+**Tag:** `phase11`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 74 | GitOps: Argo CD / Flux | [day74_gitops.md](docs/phase11/day74_gitops.md) | `infra/argocd/` — Application manifests, sync policy, rollback | ☐ |
-| 75 | Progressive Delivery for Models | [day75_progressive_delivery.md](docs/phase11/day75_progressive_delivery.md) | Blue-green + canary on K8s — Argo Rollouts config | ☐ |
-| 76 | Continuous Training Automation | [day76_continuous_training.md](docs/phase11/day76_continuous_training.md) | `ci/ct_trigger.py` — retrain → registry → deploy; Argo Workflows / Events | ☐ |
-| 77 | Consolidation | [day77_consolidation.md](docs/phase11/day77_consolidation.md) | End-to-end CT test: trigger → train → gate → promote → deploy | ☐ |
+| 74 | GitOps: Argo CD / Flux | [day74_gitops.md](docs/phase11/day74_gitops.md) | `infra/gitops.py` + `argocd/application.yaml` | ✅ |
+| 75 | Progressive Delivery for Models | [day75_progressive_delivery.md](docs/phase11/day75_progressive_delivery.md) | `infra/progressive_delivery.py` — CanaryStep, ArgoRollout, AnalysisTemplate | ✅ |
+| 76 | Continuous Training Automation | [day76_ct_automation.md](docs/phase11/day76_ct_automation.md) | `infra/ct_automation.py` — CTTrigger, CTWorkflowSpec, CTRun | ✅ |
+| 77 | Consolidation | [day77_consolidation.md](docs/phase11/day77_consolidation.md) | End-to-end GitOps + CT architecture map + checklist | ✅ |
+
+### Code Modules
+
+| Module | Key Classes | Description |
+|---|---|---|
+| `infra/gitops.py` | `ArgoCDApp`, `SyncPolicy`, `AppSyncResult`, `AppHealthStatus` | Argo CD Application CRD builder with sync wave annotation + model version promotion |
+| `infra/progressive_delivery.py` | `CanaryStep`, `RolloutStrategy`, `AnalysisTemplate`, `ArgoRollout` | Canary step sequencer, Argo Rollouts CRD, Prometheus-backed AUC/PSI gate |
+| `infra/ct_automation.py` | `CTTrigger`, `CTWorkflowSpec`, `CTWorkflowStep`, `CTRun` | CT trigger evaluation, Argo Workflow DAG builder, run result with regression detection |
+
+### Test Coverage
+
+| Test File | Tests |
+|---|---|
+| `tests/unit/test_gitops.py` | 31 |
+| `tests/unit/test_progressive_delivery.py` | 41 |
+| `tests/unit/test_ct_automation.py` | 38 |
+| **Total** | **110** |
+
+### Quick Start
+
+```bash
+make gitops-gate-check
+
+# Run Phase 11 unit tests directly
+uv run pytest tests/unit/test_gitops.py tests/unit/test_progressive_delivery.py \
+    tests/unit/test_ct_automation.py -v
+```
+
+### Key Concepts
+
+- **GitOps = reconciliation loop** — Argo CD diffs Git (desired) vs cluster (live) and syncs continuously
+- **Model ≠ image** — `image.tag` (code) and `model.storageUri` (model) change independently; both in `values.yaml`
+- **Sync waves** — secrets (wave 1) → configmaps (wave 2) → InferenceService (wave 3); ordered by annotation
+- **Canary steps** must end at `weight=100`; `RolloutStrategy.validate()` enforces this
+- **AnalysisTemplate** gates canary on Prometheus: AUC ≥ 0.78 AND PSI < 0.2; failure rolls back
+- **CT trigger cooldown** — `cooldown_hours >= 6` prevents retraining storms from repeated drift alerts
+- **CT non-regression** — `CTRun.is_regression(tolerance=0.01)` blocks promotion if AUC drops > 1%
 
 ---
 
