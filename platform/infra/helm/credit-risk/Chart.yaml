@@ -1,0 +1,13 @@
+apiVersion: v2
+name: credit-risk
+description: Credit risk ML serving API — tabular model + FastAPI
+type: application
+version: 0.1.0
+appVersion: "1.2.0"
+keywords:
+  - ml
+  - mlops
+  - credit-risk
+maintainers:
+  - name: mlops-team
+    email: mlops@example.com

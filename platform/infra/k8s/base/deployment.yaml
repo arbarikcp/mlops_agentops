@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-risk-api
+  namespace: ml-serving
+  labels:
+    app: credit-risk-api
+    version: v1
+    phase: "8"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: credit-risk-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: credit-risk-api
+        version: v1
+    spec:
+      # Model download before API starts
+      initContainers:
+        - name: model-downloader
+          image: amazon/aws-cli:2.15.0
+          command:
+            - aws
+            - s3
+            - cp
+            - "$(MODEL_S3_PATH)"
+            - /model/model.pkl
+          env:
+            - name: MODEL_S3_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-risk-config
+                  key: MODEL_S3_PATH
+          volumeMounts:
+            - name: model-volume
+              mountPath: /model
+
+      containers:
+        - name: credit-risk-api
+          image: credit-risk-api:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-risk-config
+                  key: MLFLOW_TRACKING_URI
+            - name: MODEL_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-risk-config
+                  key: MODEL_VERSION
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: credit-risk-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          # Readiness: wait for model to load (up to 60s)
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 12
+          # Liveness: restart if API is stuck
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: model-volume
+              mountPath: /model
+
+      volumes:
+        - name: model-volume
+          emptyDir: {}

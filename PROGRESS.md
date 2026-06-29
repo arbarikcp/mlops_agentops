@@ -827,26 +827,79 @@ uv run pytest tests/unit/test_ml_pipeline.py tests/unit/test_ml_tests.py \
 
 ---
 
-## Phase 9 — Kubernetes for ML (Days 59–70)
-**Tag:** `phase9` *(pending)*
-**Milestone:** 2 — Kubernetes & Cloud ML Platform
+## Phase 9 — Kubernetes for ML (Days 59–70) ✅
+**Tag:** `phase9`
+**Milestone:** 2 — Kubernetes & Cloud ML Platform (in progress)
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Theory | Code | Status |
 |---|---|---|---|---|
-| 59 | K8s for ML — Fundamentals | [day59_k8s_fundamentals.md](docs/phase9/day59_k8s_fundamentals.md) | `infra/k8s/` — Pod, Deployment, Service manifests; resource limits | ☐ |
-| 60 | kind Cluster — Deploy + Ingress | [day60_kind_cluster.md](docs/phase9/day60_kind_cluster.md) | `infra/k8s/serving-deployment.yaml` + ingress + `make k8s-deploy` | ☐ |
-| 61 | Helm Chart | [day61_helm_chart.md](docs/phase9/day61_helm_chart.md) | `infra/helm/credit-risk/` — full Helm chart + values.yaml | ☐ |
-| 62 | Storage on K8s | [day62_k8s_storage.md](docs/phase9/day62_k8s_storage.md) | PVC templates, init-container model pull, storage strategy doc | ☐ |
-| 63 | GPU on K8s | [day63_gpu_k8s.md](docs/phase9/day63_gpu_k8s.md) | NVIDIA GPU Operator config, device plugin, node selector/taint manifests | ☐ |
-| 64 | KServe InferenceService | [day64_kserve.md](docs/phase9/day64_kserve.md) | `infra/k8s/kserve-inference.yaml` — predictor + transformer, scale-to-zero | ☐ |
-| 65 | KServe Canary & Traffic Split | [day65_kserve_canary.md](docs/phase9/day65_kserve_canary.md) | `infra/k8s/kserve-canary.yaml` — canary %, shadow/mirror config | ☐ |
-| 66 | Ray on K8s (KubeRay) | [day66_ray_k8s.md](docs/phase9/day66_ray_k8s.md) | `infra/k8s/ray-cluster.yaml` + Ray Serve multi-model pipeline | ☐ |
-| 67 | Autoscaling: HPA + KEDA | [day67_autoscaling.md](docs/phase9/day67_autoscaling.md) | `infra/k8s/hpa.yaml`, `infra/k8s/keda-scaledobject.yaml` | ☐ |
-| 68 | Kueue GPU Scheduling | [day68_kueue.md](docs/phase9/day68_kueue.md) | `infra/k8s/kueue/` — ClusterQueue, LocalQueue, job quota manifests | ☐ |
-| 69 | Prometheus + Grafana on K8s | [day69_k8s_observability.md](docs/phase9/day69_k8s_observability.md) | `infra/k8s/monitoring/` — ServiceMonitor, Grafana dashboards + RBAC | ☐ |
-| 70 | Kubeflow Survey + Consolidation | [day70_kubeflow_survey.md](docs/phase9/day70_kubeflow_survey.md) | Kubeflow Pipelines/Katib/Training Operator comparison doc | ☐ |
+| 59 | K8s for ML — Fundamentals | [day59_k8s_fundamentals.md](docs/phase9/day59_k8s_fundamentals.md) | `infra/k8s_manifests.py` + YAML manifests | ✅ |
+| 60 | kind Cluster — Deploy + Ingress | [day60_kind_cluster.md](docs/phase9/day60_kind_cluster.md) | `infra/ingress.py` + kind cluster.yaml | ✅ |
+| 61 | Helm Chart | [day61_helm_chart.md](docs/phase9/day61_helm_chart.md) | `infra/helm_chart.py` + full chart templates | ✅ |
+| 62 | Storage on K8s | [day62_k8s_storage.md](docs/phase9/day62_k8s_storage.md) | `infra/k8s_gpu_storage.py` (VolumeSpec) | ✅ |
+| 63 | GPU on K8s | [day63_gpu_k8s.md](docs/phase9/day63_gpu_k8s.md) | `infra/k8s_gpu_storage.py` (GPUWorkloadSpec) | ✅ |
+| 64 | KServe InferenceService | [day64_kserve.md](docs/phase9/day64_kserve.md) | `infra/kserve.py` (InferenceServiceSpec) | ✅ |
+| 65 | KServe Canary & Traffic Split | [day65_kserve_canary.md](docs/phase9/day65_kserve_canary.md) | `infra/kserve.py` (CanaryConfig) | ✅ |
+| 66 | Ray on K8s (KubeRay) | [day66_ray_k8s.md](docs/phase9/day66_ray_k8s.md) | Theory + RayCluster YAML | ✅ |
+| 67 | Autoscaling: HPA + KEDA | [day67_autoscaling.md](docs/phase9/day67_autoscaling.md) | `infra/k8s_autoscaling.py` (HPASpec, KEDAScaledObject) | ✅ |
+| 68 | Kueue GPU Scheduling | [day68_kueue.md](docs/phase9/day68_kueue.md) | `infra/k8s_autoscaling.py` (KueueJobConfig) | ✅ |
+| 69 | Prometheus + Grafana on K8s | [day69_k8s_observability.md](docs/phase9/day69_k8s_observability.md) | `infra/k8s_observability.py` + ServiceMonitor + RBAC | ✅ |
+| 70 | Kubeflow Survey + Consolidation | [day70_kubeflow_survey.md](docs/phase9/day70_kubeflow_survey.md) | Survey doc + K8s gate checklist | ✅ |
+
+### Code Modules
+
+| Module | Key Classes | Description |
+|---|---|---|
+| `infra/k8s_manifests.py` | `DeploymentSpec`, `ServiceSpec`, `K8sManifestSet`, `ResourceRequirements` | K8s Deployment + Service + ConfigMap manifest builders |
+| `infra/ingress.py` | `IngressSpec`, `IngressRule` | NGINX Ingress manifest builder for kind cluster |
+| `infra/helm_chart.py` | `HelmChart`, `HelmValues` | Helm values builder + CLI command renderer |
+| `infra/k8s_gpu_storage.py` | `VolumeSpec`, `GPUWorkloadSpec`, `GPUToleration` | Three storage strategies + GPU pod spec with tolerations |
+| `infra/kserve.py` | `InferenceServiceSpec`, `CanaryConfig` | KServe InferenceService + canary promote/rollback |
+| `infra/k8s_autoscaling.py` | `HPASpec`, `KEDAScaledObject`, `KueueJobConfig` | HPA, KEDA queue-depth scaling, Kueue GPU job queueing |
+| `infra/k8s_observability.py` | `ServiceMonitorSpec`, `ClusterRoleSpec`, `SecretThreatChecker` | Prometheus ServiceMonitor, RBAC, secret misconfiguration scanner |
+
+### Test Coverage
+
+| Test File | Tests |
+|---|---|
+| `tests/unit/test_k8s_manifests.py` | 34 |
+| `tests/unit/test_ingress.py` | 13 |
+| `tests/unit/test_helm_chart.py` | 17 |
+| `tests/unit/test_k8s_gpu_storage.py` | 22 |
+| `tests/unit/test_kserve.py` | 24 |
+| `tests/unit/test_k8s_autoscaling.py` | 29 |
+| `tests/unit/test_k8s_observability.py` | 21 |
+| **Total** | **160** |
+
+### Quick Start
+
+```bash
+make k8s-gate-check
+
+# Create local kind cluster (requires kind + kubectl)
+make kind-up
+kubectl apply -f infra/k8s/base/ -n ml-serving
+
+# Run Phase 9 unit tests
+uv run pytest tests/unit/test_k8s_manifests.py tests/unit/test_ingress.py \
+    tests/unit/test_helm_chart.py tests/unit/test_k8s_gpu_storage.py \
+    tests/unit/test_kserve.py tests/unit/test_k8s_autoscaling.py \
+    tests/unit/test_k8s_observability.py -v
+```
+
+### Key Concepts
+
+- **requests vs limits** — requests = scheduling guarantee; limits = hard cap. Always set both. OOMKilled if memory limit exceeded.
+- **GPU isolation** — `nvidia.com/gpu` must equal in requests and limits; taint + toleration prevents CPU pods landing on expensive GPU nodes.
+- **init-container model pull** — model file ready before API starts; eliminates race condition on cold start.
+- **Storage drag** — emptyDir re-downloads per pod; PVC ReadOnlyMany downloads once; node-local PV caches per node.
+- **KServe scale-to-zero** — pod count → 0 on silence; cold start 5–30s; Knative autoscaler checks every 2s.
+- **Canary promotion** — `canaryTrafficPercent` patch from 10% → 50% → 100%; `rollback()` resets to 0%.
+- **KEDA vs HPA** — HPA scales on CPU/memory; KEDA scales on external signals (SQS depth, Kafka lag) with scale-to-zero.
+- **Kueue fair-share** — LocalQueue per team enforces GPU quota; BestEffortFIFO admits jobs when quota allows.
+- **Secret threat rule** — credentials in ConfigMap = HIGH; secret as env var = MEDIUM (prefer volume mount).
 
 ---
 

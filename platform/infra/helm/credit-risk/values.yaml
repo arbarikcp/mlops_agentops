@@ -1,0 +1,50 @@
+replicaCount: 3
+
+image:
+  repository: credit-risk-api
+  tag: v1
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+config:
+  mlflowUri: http://mlflow.mlops-infra.svc.cluster.local:5000
+  modelVersion: credit-risk-v1.2
+  modelS3Path: s3://ml-models/credit-risk/v1.2/model.pkl
+  logLevel: INFO
+
+ingress:
+  enabled: true
+  className: nginx
+  host: localhost
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  failureThreshold: 12
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3

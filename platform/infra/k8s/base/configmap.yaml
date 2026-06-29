@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: credit-risk-config
+  namespace: ml-serving
+data:
+  MLFLOW_TRACKING_URI: "http://mlflow.mlops-infra.svc.cluster.local:5000"
+  MODEL_VERSION: "credit-risk-v1.2"
+  MODEL_S3_PATH: "s3://ml-models/credit-risk/v1.2/model.pkl"
+  LOG_LEVEL: "INFO"
+  FEATURE_STORE_URL: "http://feast.mlops-infra.svc.cluster.local:6566"

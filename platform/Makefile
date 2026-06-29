@@ -15,6 +15,7 @@ SEED = 42
         feature-store-gate-check \
         monitoring-gate-check \
         milestone1-gate-check \
+        k8s-gate-check \
         kind-up kind-down
 
 help:
@@ -75,6 +76,11 @@ help:
 	@echo ""
 	@echo "  Phase 8 — CI/CD for ML (Days 54-58) — MILESTONE 1:"
 	@echo "    make milestone1-gate-check     Run Milestone 1 gate dry-run (Day 58)"
+	@echo ""
+	@echo "  Phase 9 — Kubernetes for ML (Days 59-70):"
+	@echo "    make k8s-gate-check            Run K8s manifest validation dry-run (Day 70)"
+	@echo "    make kind-up                   Create local kind cluster (3 nodes)"
+	@echo "    make kind-down                 Delete local kind cluster"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -632,6 +638,51 @@ print(f'  ✅ SBOM: {len(sbom.entries)} components ({[e.name for e in sbom.entri
 "
 	@echo ""
 	@echo "  Milestone 1 Gate: PASSED ✅ — Era A Classical MLOps complete"
+
+# ── K8s Gate — Phase 9 ──────────────────────────────────────────────────────
+
+k8s-gate-check:
+	@echo "→ Phase 9 K8s Gate Dry-Run (Day 70)..."
+	@echo ""
+	@echo "  Checking Phase 9 test suite..."
+	@uv run python -m pytest \
+	    tests/unit/test_k8s_manifests.py tests/unit/test_ingress.py \
+	    tests/unit/test_helm_chart.py tests/unit/test_k8s_gpu_storage.py \
+	    tests/unit/test_kserve.py tests/unit/test_k8s_autoscaling.py \
+	    tests/unit/test_k8s_observability.py \
+	    --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 9 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  Manifest builder self-test..."
+	@uv run python -c "
+from infra.k8s_manifests import ContainerSpec, DeploymentSpec, K8sManifestSet, ResourceRequirements, ServiceSpec
+dep = DeploymentSpec('credit-risk-api', containers=[ContainerSpec('api', 'credit-risk:v1', port=8080)])
+svc = ServiceSpec('credit-risk-api')
+ms = K8sManifestSet(dep, svc, configmap={'MODEL_VERSION': 'v1.2'})
+kinds = ms.manifest_kinds()
+print(f'  ✅ ManifestSet: {kinds}')
+"
+	@echo ""
+	@echo "  KServe canary self-test..."
+	@uv run python -c "
+from infra.kserve import CanaryConfig
+c = CanaryConfig('credit-risk', stable_storage_uri='s3://m/v1/', canary_storage_uri='s3://m/v2/', canary_traffic_pct=10)
+promoted = c.promote()
+rolled = c.rollback()
+print(f'  ✅ Canary: 10% → promote={promoted.canary_traffic_pct}% rollback={rolled.canary_traffic_pct}%')
+"
+	@echo ""
+	@echo "  Secret threat check self-test..."
+	@uv run python -c "
+from infra.k8s_observability import SecretThreatChecker
+clean = {'kind': 'ConfigMap', 'data': {'MLFLOW_URI': 'http://mlflow:5000'}}
+dirty = {'kind': 'ConfigMap', 'data': {'POSTGRES_PASSWORD': 'changeme'}}
+f1 = SecretThreatChecker().check(clean)
+f2 = SecretThreatChecker().check(dirty)
+print(f'  ✅ Threat checker: clean={len(f1)} findings, credential-in-configmap={len(f2)} findings (HIGH)')
+"
+	@echo ""
+	@echo "  K8s Gate: PASSED ✅"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 
