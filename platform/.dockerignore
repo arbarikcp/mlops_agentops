@@ -1,0 +1,63 @@
+# Git metadata — prevents repository history from entering the image
+.git/
+.gitignore
+.gitattributes
+
+# Python cache — stale at image build time
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments — the builder stage creates a fresh one
+.venv/
+venv/
+env/
+
+# Test and development tools — not needed at runtime
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Documentation — not needed at runtime
+docs/
+notebooks/
+*.md
+*.rst
+
+# Raw data — too large; served from S3/DVC at training time
+data/raw/
+data/processed/
+
+# Local secrets and config overrides — NEVER in the image
+.env
+*.env
+.env.*
+secrets/
+
+# CI/CD config — not needed in runtime image
+.github/
+.gitlab-ci.yml
+Makefile
+
+# Docker artifacts
+Dockerfile*
+.dockerignore
+
+# DVC (data version control) metadata
+.dvc/
+dvc.yaml
+dvc.lock
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

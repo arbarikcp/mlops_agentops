@@ -389,18 +389,131 @@ uv run python -m data.contracts.feature_schema data/processed/features.parquet -
 ---
 
 ## Phase 4 — Packaging & Serving (Days 22–30)
+**Tag:** `phase4`
 
-| Day | Title | Deliverable | Status |
-|---|---|---|---|
-| 22 | Serialization (ONNX) | ONNX export | ☐ |
-| 23 | Inference Patterns | (theory) | ☐ |
-| 24 | FastAPI | Versioned endpoint | ☐ |
-| 25 | Containerize | Non-root multi-stage image | ☐ |
-| 26 | BentoML | Bento with adaptive batching | ☐ |
-| 27 | Batch Inference | Idempotent batch script | ☐ |
-| 28 | Model API Contract | Versioned schema | ☐ |
-| 29 | Load Testing | k6/Locust report p95/p99 | ☐ |
-| 30 | Serving Security | mTLS + rate limits + Serving gate | ☐ |
+### Day Table
+
+| Day | Title | Theory | Deliverable | Status |
+|---|---|---|---|---|
+| 22 | Serialization | [day22_serialization.md](docs/phase4/day22_serialization.md) | `serving/serialization.py` — ONNX export, pickle risk, SHA-256 checksum | ✅ |
+| 23 | Inference Patterns | [day23_inference_patterns.md](docs/phase4/day23_inference_patterns.md) | `serving/inference.py` — ModelRunner, LatencyTracker, online + batch | ✅ |
+| 24 | FastAPI | [day24_fastapi.md](docs/phase4/day24_fastapi.md) | `serving/api.py` — /health, /ready, /v1/predict, /v1/predict/batch | ✅ |
+| 25 | Containerize | [day25_containerize.md](docs/phase4/day25_containerize.md) | `serving/Dockerfile` (multi-stage, non-root), `.dockerignore` | ✅ |
+| 26 | BentoML | [day26_bentoml.md](docs/phase4/day26_bentoml.md) | `serving/bento_service.py` — AdaptiveBatcher, BentoPackager | ✅ |
+| 27 | Batch Inference | [day27_batch_inference.md](docs/phase4/day27_batch_inference.md) | `serving/batch_inference.py` — BatchInferenceJob, ManifestStore, plan_backfill | ✅ |
+| 28 | Model API Contract | [day28_api_contract.md](docs/phase4/day28_api_contract.md) | `serving/api_contract.py` — FieldSchema, ApiContractChecker, RollbackPlan | ✅ |
+| 29 | Load Testing | [day29_load_testing.md](docs/phase4/day29_load_testing.md) | `serving/load_test.py`, `serving/locustfile.py` — LatencyProfiler, LoadTestRunner | ✅ |
+| 30 | Serving Security | [day30_serving_security.md](docs/phase4/day30_serving_security.md) | `serving/security.py` — ApiKeyStore, RateLimiter, SecurityConfig + Serving Gate dry-run | ✅ |
+
+### What's in This Phase
+
+**Theory docs** (`docs/phase4/`):
+
+| File | Content |
+|---|---|
+| [day22_serialization.md](docs/phase4/day22_serialization.md) | ONNX vs pickle vs safetensors, pickle CVE, parity validation, opset, float32 precision |
+| [day23_inference_patterns.md](docs/phase4/day23_inference_patterns.md) | Online/batch/streaming comparison, latency budget breakdown, p50/p95/p99 explanation |
+| [day24_fastapi.md](docs/phase4/day24_fastapi.md) | Pydantic v2 schemas, /health vs /ready distinction, API versioning, lifespan startup |
+| [day25_containerize.md](docs/phase4/day25_containerize.md) | Multi-stage build, non-root user, image scanning (Trivy), threat checkpoint |
+| [day26_bentoml.md](docs/phase4/day26_bentoml.md) | Runner abstraction, adaptive batching algorithm, max_batch_size vs max_latency_ms tuning |
+| [day27_batch_inference.md](docs/phase4/day27_batch_inference.md) | Idempotency key pattern, manifest protocol, backfill strategy, checksum verification |
+| [day28_api_contract.md](docs/phase4/day28_api_contract.md) | Breaking vs compatible schema changes, deprecation protocol, rollback plan SLA |
+| [day29_load_testing.md](docs/phase4/day29_load_testing.md) | k6 script, Locust scenarios, load test phases (baseline/ramp/soak/spike) |
+| [day30_serving_security.md](docs/phase4/day30_serving_security.md) | AuthN/AuthZ, rate limiting, secrets management, mTLS, Serving Gate checklist |
+
+**Code** (`platform/serving/`):
+
+| File | What it does |
+|---|---|
+| `serving/__init__.py` | Module init with serving module roadmap |
+| `serving/serialization.py` | `ModelSerializer` — ONNX export, checksum verify, parity check, pickle risk |
+| `serving/inference.py` | `ModelRunner` — ONNX session management, online predict, batch predict; `LatencyTracker` |
+| `serving/api.py` | FastAPI app — /health, /ready, /v1/predict, /v1/predict/batch, /v1/model/info |
+| `serving/Dockerfile` | Multi-stage Docker build, non-root appuser (UID 1001), HEALTHCHECK |
+| `.dockerignore` | Excludes .git, .env, tests/, data/raw/ from image |
+| `serving/bento_service.py` | `AdaptiveBatcher`, `RunnerConfig`, `BentoPackager` — BentoML concepts without bentoml dep |
+| `serving/batch_inference.py` | `BatchInferenceJob`, `ManifestStore`, `BatchJobManifest`, `plan_backfill` |
+| `serving/api_contract.py` | `FieldSchema`, `ApiContractVersion`, `ApiContractChecker`, `CompatibilityReport`, `RollbackPlan` |
+| `serving/load_test.py` | `LatencyProfiler`, `LoadTestConfig`, `LoadTestResult`, `LoadTestRunner` |
+| `serving/locustfile.py` | Locust scenario (90% predict / 9% health / 1% info) with traffic mix |
+| `serving/security.py` | `ApiKey`, `ApiKeyStore` (SHA-256 hashing), `RateLimiter` (sliding window), `SecurityConfig` |
+
+**Tests** (`platform/tests/unit/`):
+
+| File | Tests |
+|---|---|
+| `tests/unit/test_serialization.py` | 23 tests — SHA-256, checksum verify, pickle risk levels, ONNX export mock, parity check |
+| `tests/unit/test_inference.py` | 26 tests — LatencyTracker p-tiles, ModelRunner load/predict-single/predict-batch, threshold |
+| `tests/unit/test_api.py` | 35 tests — /health always 200, /ready 503→200, /v1/predict validation, 422 cases |
+| `tests/unit/test_dockerfile.py` | 19 tests — multi-stage FROM, USER appuser, EXPOSE 8080, no secrets, slim base, .dockerignore |
+| `tests/unit/test_bento_service.py` | 27 tests — RunnerConfig validation, flush_now, submit threshold, stats, BentoPackager YAML |
+| `tests/unit/test_batch_inference.py` | 21 tests — ManifestStore write/read/list, idempotency skip, force re-run, backfill plan |
+| `tests/unit/test_api_contract.py` | 28 tests — field roundtrip, compatible/breaking/warning changes, v1→v2 built-in, RollbackPlan |
+| `tests/unit/test_load_test.py` | 26 tests — LatencyProfiler record/measure, LoadTestConfig validation, runner results, locustfile |
+| `tests/unit/test_security.py` | 36 tests — key hashing, ApiKey expiry, ApiKeyStore validate/revoke, RateLimiter window, SecurityConfig |
+
+**Total Phase 4 tests: 241 (all passing)**
+
+### Quick Start (from `git checkout phase4`)
+
+**Prerequisites:** Phase 3 complete. Python 3.11+, `uv` installed.
+
+```bash
+cd platform
+
+# 1. Install deps (includes FastAPI, uvicorn, httpx):
+uv sync
+
+# 2. Run all Phase 4 tests:
+uv run pytest tests/unit/test_serialization.py tests/unit/test_inference.py \
+    tests/unit/test_api.py tests/unit/test_dockerfile.py \
+    tests/unit/test_bento_service.py tests/unit/test_batch_inference.py \
+    tests/unit/test_api_contract.py tests/unit/test_load_test.py \
+    tests/unit/test_security.py --override-ini="addopts=" -v
+
+# 3. Start the FastAPI server locally (requires ONNX model):
+make serve-local
+# Then: curl http://localhost:8080/health
+# Then: curl http://localhost:8080/ready
+
+# 4. Serving Gate dry-run:
+make serving-gate-check
+
+# 5. Run Locust load test (requires server running):
+# locust -f serving/locustfile.py --host http://localhost:8080 \
+#     --users 50 --spawn-rate 5 --run-time 60s --headless
+```
+
+**Key outputs after running:**
+
+| Artifact | Contents |
+|---|---|
+| `serving/Dockerfile` | Production-ready multi-stage image definition |
+| `models/credit_risk_model.onnx` | ONNX-exported model (via serialization.export_to_onnx) |
+| `models/credit_risk_model.onnx.sha256` | SHA-256 checksum for artifact integrity |
+| `manifests/*.json` | Batch job completion manifests (idempotency records) |
+
+**Debugging:**
+
+```bash
+# FastAPI 503 on /v1/predict?
+# → Check /ready — model may not be loaded (needs MODEL_PATH set)
+
+# Parity check fails after ONNX export?
+# → float32 precision loss — widen threshold to 5e-3
+# → Check column order matches feature_names used at export
+
+# Rate limiter blocking legitimate traffic?
+# → Adjust RATE_LIMIT_PER_MIN env var or window_seconds
+
+# Dockerfile image too large?
+# → Ensure multi-stage (builder → runtime) — check two FROM statements
+# → Run: docker build -f serving/Dockerfile . --target runtime
+
+# Load test p99 > SLA?
+# → Profile with LatencyProfiler — split inference vs I/O vs serialisation
+# → Check ONNX session is pre-loaded (not loaded per-request)
+```
 
 ---
 

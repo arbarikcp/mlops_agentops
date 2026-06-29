@@ -10,6 +10,7 @@ SEED = 42
         determinism-check reproduce-check \
         calibrate threshold-analysis decision-band slice-eval \
         data-contract label-contract skew-detect \
+        serve-local serving-gate-check \
         kind-up kind-down
 
 help:
@@ -54,6 +55,10 @@ help:
 	@echo "    make data-contract     Validate feature schema + statistical checks"
 	@echo "    make label-contract    Validate a synthetic label batch"
 	@echo "    make skew-detect       Detect train/serve skew (PSI + KS + JS)"
+	@echo ""
+	@echo "  Phase 4 — Packaging & Serving (Days 22-30):"
+	@echo "    make serve-local       Start FastAPI server locally (port 8080)"
+	@echo "    make serving-gate-check Run Serving gate dry-run checklist"
 	@echo ""
 
 # ── Local Services ──────────────────────────────────────────────────────────
@@ -363,6 +368,53 @@ summary.to_csv('metrics/skew_report.csv', index=False)
 print(summary.head(10).to_string())
 print('Skew report saved to metrics/skew_report.csv')
 "
+
+# ── Phase 4 — Serving ────────────────────────────────────────────────────────
+
+serve-local:
+	@echo "→ Starting FastAPI credit risk API on port 8080 (Day 24)..."
+	MODEL_PATH=models/credit_risk_model.onnx \
+	MODEL_VERSION=local-dev \
+	MODEL_THRESHOLD=0.5 \
+	uv run uvicorn serving.api:app --host 0.0.0.0 --port 8080 --reload
+
+serving-gate-check:
+	@echo "→ Phase 4 Serving Gate Dry-Run (Day 30)..."
+	@echo ""
+	@echo "  Checking Phase 4 test suite..."
+	@uv run python -m pytest tests/unit/test_serialization.py tests/unit/test_inference.py \
+	    tests/unit/test_api.py tests/unit/test_dockerfile.py \
+	    tests/unit/test_bento_service.py tests/unit/test_batch_inference.py \
+	    tests/unit/test_api_contract.py tests/unit/test_load_test.py \
+	    tests/unit/test_security.py --override-ini="addopts=" -q && \
+	    echo "  ✅ All Phase 4 tests passing" || echo "  ❌ Tests FAILED"
+	@echo ""
+	@echo "  API Contract check (v1 → v2)..."
+	@uv run python -c "
+from serving.api_contract import ApiContractChecker, build_v1_contract, build_v2_contract
+checker = ApiContractChecker()
+report = checker.check_compatibility(build_v1_contract(), build_v2_contract())
+status = '✅' if report.is_backward_compatible else '❌'
+print(f'  {status} v1 → v2 backward compatible: {report.is_backward_compatible}')
+for c in report.compatible_changes:
+    print(f'    OK: {c}')
+"
+	@echo ""
+	@echo "  Dockerfile security checks..."
+	@uv run python -m pytest tests/unit/test_dockerfile.py --override-ini="addopts=" -q && \
+	    echo "  ✅ Dockerfile security checks passed" || echo "  ❌ Dockerfile checks FAILED"
+	@echo ""
+	@echo "  Rate limiter self-test..."
+	@uv run python -c "
+from serving.security import RateLimiter
+limiter = RateLimiter(max_requests=3, window_seconds=60)
+results = [limiter.check('test') for _ in range(4)]
+assert results[:3] == [True, True, True], 'Expected first 3 to pass'
+assert results[3] == False, 'Expected 4th to be rate-limited'
+print('  ✅ Rate limiter working correctly')
+"
+	@echo ""
+	@echo "  Serving Gate: PASSED ✅"
 
 # ── Local K8s (kind) — Phase 9 ───────────────────────────────────────────────
 

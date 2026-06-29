@@ -29,6 +29,10 @@ dependencies = [
     "pyyaml>=6.0.0",
     "openpyxl>=3.1.0",    # for reading .xls UCI dataset
     "xlrd>=2.0.0",
+    # Phase 4 — Serving
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "httpx>=0.26.0",
 ]
 
 [project.optional-dependencies]
