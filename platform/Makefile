@@ -21,6 +21,7 @@ SEED = 42
         milestone2-gate-check \
         phase13-gate-check \
         phase14-gate-check \
+        phase15-gate-check \
         kind-up kind-down
 
 define PYBLOCK_01
@@ -849,6 +850,13 @@ phase13-gate-check:
 phase14-gate-check:
 	@echo "Phase 14 Gate Check — LLMOps Core"
 	@uv run python -m pytest tests/unit/test_llmops_core.py tests/unit/test_llm_serving.py tests/unit/test_prompt_registry.py tests/unit/test_llm_eval.py tests/unit/test_ragas_eval.py tests/unit/test_finetuning_ops.py tests/unit/test_llm_observability.py tests/unit/test_llm_monitoring.py tests/unit/test_llm_gateway.py --override-ini="addopts=" -q && echo "  ✅ All Phase 14 tests passing" || echo "  ❌ Tests FAILED"
+
+# ── Phase 15 Gate — RAG Production Operations + Milestone 3 Gate ──────────────
+
+phase15-gate-check:
+	@echo "Phase 15 Gate Check — RAG Production Operations + Milestone 3 Gate"
+	@uv run python -m pytest tests/unit/test_index_pipeline.py tests/unit/test_retrieval.py tests/unit/test_retrieval_security.py tests/unit/test_index_lifecycle.py tests/unit/test_retrieval_eval.py tests/unit/test_rag_guardrails.py tests/unit/test_milestone3_gate.py --override-ini="addopts=" -q && echo "  ✅ All Phase 15 tests passing" || echo "  ❌ Tests FAILED"
+	@uv run python -c "from llm.milestone3_gate import Milestone3Gate; g=Milestone3Gate.dry_run(); s=g.summary(); print(f'  ✅ Milestone 3 Gate: {s[\"gateStatus\"]} | {len(s[\"checks\"])} checks | {s[\"total_records\"]} provenance records')"
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 

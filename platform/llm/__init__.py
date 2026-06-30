@@ -24,4 +24,14 @@ finetuning_ops      (Day 105) — LoRA/QLoRA fine-tuning, dataset versioning, ev
 llm_observability   (Day 106) — OTel GenAI span attributes, Langfuse/Phoenix/LangSmith comparison
 llm_monitoring      (Day 107) — Quality/hallucination drift, online eval sampling, eval economics
 llm_gateway         (Day 108) — Model routing, quota enforcement, semantic caching, cost governance
+
+Phase 15: RAG Production Operations (Days 109–114) — MILESTONE 3 GATE
+-----------------------------------------------------------------------
+index_pipeline      (Day 109) — Index build pipeline, immutable IndexVersion, alias-based rollback
+retrieval           (Day 110) — Chunking experiments, BM25+vector hybrid fusion (RRF), reranking
+retrieval_security  (Day 111) — Metadata filtering, multi-tenant ACL enforcement, index-poisoning detection
+index_lifecycle     (Day 112) — Stale-doc TTL removal, embedding-model migration, RAG cache invalidation
+retrieval_eval      (Day 113) — Retrieval failure taxonomy, golden query sets, synthetic query generation
+rag_guardrails      (Day 114) — Prompt-injection scanning (OWASP LLM Top 10), source trust, slice-level eval
+milestone3_gate     (Day 114) — MILESTONE 3 GATE: full RAG provenance + eval threshold + guardrails + cost
 """

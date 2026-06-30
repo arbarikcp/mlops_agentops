@@ -1170,21 +1170,99 @@ make phase14-gate-check
 
 ---
 
-## Phase 15 — RAG Production Operations (Days 109–114) → MILESTONE 3 GATE
-**Tag:** `phase15` *(pending)*
+## Phase 15 — RAG Production Operations (Days 109–114) → MILESTONE 3 GATE ✅
+**Tag:** `phase15`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
-|---|---|---|---|---|
-| 109 | Index Build Pipeline | [day109_index_pipeline.md](docs/phase15/day109_index_pipeline.md) | `llm/index_pipeline.py` — build, version, rollback index | ☐ |
-| 110 | Chunking + Hybrid Retrieval | [day110_hybrid_retrieval.md](docs/phase15/day110_hybrid_retrieval.md) | `llm/retriever.py` — BM25 + vector hybrid, reranker | ☐ |
-| 111 | Multi-Tenant Retrieval Security | [day111_rag_security.md](docs/phase15/day111_rag_security.md) | `llm/acl_filter.py` — metadata filtering, document ACL propagation | ☐ |
-| 112 | Stale Docs + Embedding Migration | [day112_rag_maintenance.md](docs/phase15/day112_rag_maintenance.md) | `llm/index_maintenance.py` — stale removal, embedding model migration | ☐ |
-| 113 | Retrieval Failure Taxonomy | [day113_retrieval_eval.md](docs/phase15/day113_retrieval_eval.md) | `llm/golden_query_set.py` — golden set, synthetic query gen, failure taxonomy | ☐ |
-| 114 | RAG Guardrails + M3 Gate | [day114_milestone3_gate.md](docs/phase15/day114_milestone3_gate.md) | `llm/guardrails.py` — prompt injection, source trust, Llama Guard + **M3 GATE** | ☐ |
+| Day | Title | Theory | Code Module | Tests | Status |
+|---|---|---|---|---|---|
+| 109 | Index Build Pipeline + Versioning + Rollback | [day109_index_pipeline.md](docs/phase15/day109_index_pipeline.md) | `llm/index_pipeline.py` | 30 | ✅ |
+| 110 | Chunking Experiments + Hybrid Retrieval (BM25 + Vector) + Reranking | [day110_hybrid_retrieval.md](docs/phase15/day110_hybrid_retrieval.md) | `llm/retrieval.py` | 31 | ✅ |
+| 111 | Metadata Filtering + Multi-Tenant Retrieval Security + ACL Propagation | [day111_retrieval_security.md](docs/phase15/day111_retrieval_security.md) | `llm/retrieval_security.py` | 36 | ✅ |
+| 112 | Stale-Document Removal + Embedding-Model Migration + Cache Invalidation | [day112_index_lifecycle.md](docs/phase15/day112_index_lifecycle.md) | `llm/index_lifecycle.py` | 34 | ✅ |
+| 113 | Retrieval Failure Taxonomy + Golden Query Set + Synthetic Query Generation | [day113_retrieval_eval.md](docs/phase15/day113_retrieval_eval.md) | `llm/retrieval_eval.py` | 26 | ✅ |
+| 114 | Eval by Document Slice/Source/Type + RAG Guardrails + **MILESTONE 3 GATE** | [day114_rag_guardrails_m3_gate.md](docs/phase15/day114_rag_guardrails_m3_gate.md) | `llm/rag_guardrails.py` + `llm/milestone3_gate.py` | 36 + 38 | ✅ |
 
 > **M3 Gate — you pass when:** for any answer you can prove "this came from these retrieved chunks, using this prompt version, this embedding model, this index version, this LLM version, and this eval score" — with guardrails active and cost tracked. Threat model at **v3**.
+
+### Code Modules
+
+| Module | Key Classes | Description |
+|---|---|---|
+| `llm/index_pipeline.py` | `IndexBuildConfig`, `IndexVersion`, `IndexAlias`, `IndexRegistry` | Immutable, content-addressed index versions; alias-based promotion and instant rollback |
+| `llm/retrieval.py` | `ChunkExperimentResult`, `HybridRetrievalConfig`, `RRFFuser`, `RerankerConfig`, `RerankResult` | Chunking strategy experiments, Reciprocal Rank Fusion of BM25 + vector ranks, cross-encoder reranking |
+| `llm/retrieval_security.py` | `DocumentACL`, `MetadataFilter`, `TenantRetrievalRequest`, `ACLEnforcer`, `PoisoningDetector` | Mandatory tenant pre-filtering, ACL enforcement, index-poisoning detection |
+| `llm/index_lifecycle.py` | `StaleDocPolicy`, `EmbeddingMigrationPlan`, `CacheKey`, `RAGCache` | TTL-based stale-doc removal, safe embedding-model migration state machine, version-keyed cache invalidation |
+| `llm/retrieval_eval.py` | `GoldenQuery`, `GoldenQuerySet`, `RetrievalEvalResult`, `SyntheticQuerySpec`, `RetrievalFailureReport` | Retrieval failure taxonomy (coverage/ranking gap classification), golden-set eval, synthetic query generation spec |
+| `llm/rag_guardrails.py` | `PromptInjectionScanner`, `SourceTrustGate`, `RAGGuardrailReport`, `SliceEvalKey`, `SliceEvalResult`, `SliceEvalReport` | OWASP LLM Top 10 prompt-injection scanning (context + output), source trust gating, slice-level eval breakdown |
+| `llm/milestone3_gate.py` | `RAGProvenanceRecord`, `M3GateCheckResult`, `Milestone3Gate` | **MILESTONE 3 GATE** — 4-check gate: provenance complete, eval threshold, guardrails active, cost tracked |
+
+### Test Coverage
+
+| Test File | Tests |
+|---|---|
+| `tests/unit/test_index_pipeline.py` | 30 |
+| `tests/unit/test_retrieval.py` | 31 |
+| `tests/unit/test_retrieval_security.py` | 36 |
+| `tests/unit/test_index_lifecycle.py` | 34 |
+| `tests/unit/test_retrieval_eval.py` | 26 |
+| `tests/unit/test_rag_guardrails.py` | 36 |
+| `tests/unit/test_milestone3_gate.py` | 38 |
+| **Total** | **231** |
+
+### Quick Start
+
+```bash
+make phase15-gate-check
+
+uv run pytest tests/unit/test_index_pipeline.py tests/unit/test_retrieval.py \
+    tests/unit/test_retrieval_security.py tests/unit/test_index_lifecycle.py \
+    tests/unit/test_retrieval_eval.py tests/unit/test_rag_guardrails.py \
+    tests/unit/test_milestone3_gate.py -v
+```
+
+### Key Concepts
+
+- **Index as production artifact** — `IndexVersion` is immutable and content-addressed (SHA-256 of embedding model + chunking strategy + chunk count); the `"production"` alias is the only mutable pointer, giving instant rollback without a rebuild.
+- **Reciprocal Rank Fusion (RRF)** — `score = 1/(k + rank_bm25) + 1/(k + rank_vector)`; combines sparse exact-match recall with dense semantic recall without needing comparable score scales.
+- **Reranking funnel** — cheap, broad initial retrieval (BM25 + vector, fused) feeds a narrow, expensive cross-encoder rerank stage on only the top-K candidates.
+- **Mandatory tenant filter** — `TenantRetrievalRequest.mandatory_filter()` is derived from the request's own identity and cannot be overridden by user-supplied filters; `ACLEnforcer` re-checks tenant + role as defense-in-depth.
+- **Index poisoning defense** — `PoisoningDetector` flags documents by low source trust score OR abnormal retrieval frequency — either signal alone is enough to flag for review.
+- **Embedding migration safety** — old and new embedding vectors are never mixed in one similarity search; migration always builds a brand-new index version in parallel and only atomically switches the alias once eval-validated and `status == "ready"`.
+- **Cache keyed by provenance** — `CacheKey.key()` bakes `index_version_id` + `prompt_version` into the cache key, so a reindex naturally invalidates stale cache entries by construction.
+- **Retrieval failure taxonomy** — `NO_RELEVANT_DOC` (coverage gap) vs. `RANKING_FAILURE` (ranking gap) are derived automatically from recall@k overlap; `CHUNK_GRANULARITY`/`QUERY_AMBIGUITY` are reserved for deeper human/LLM-judge review.
+- **RAG guardrails scan both directions** — retrieved context AND generated output are scanned for prompt-injection patterns (OWASP LLM01) before an answer is released; `SourceTrustGate` additionally screens by document trust score.
+- **Slice-level eval** — `SliceEvalReport.failing_slices()` and `worst_slice()` prevent a healthy global average from hiding a broken document category.
+- **M3 Gate — 4 checks** — provenance complete (incl. guardrails active), eval score above threshold, guardrails active on every record, cost actually tracked (`cost_usd > 0`, not defaulted to zero).
+
+---
+
+## MILESTONE 3 GATE — PASSED ✅
+
+**Closes:** Phase 15 — RAG Production Operations (Days 109–114)
+**Module:** `platform/llm/milestone3_gate.py` — `Milestone3Gate`
+**Verify:** `make phase15-gate-check`
+
+> **M3 Gate proves:** for any RAG answer, full provenance is reconstructable end-to-end — the exact retrieved chunk IDs, the prompt version, the embedding model, the index version, and the LLM version that produced it — together with an eval score above threshold, active guardrails (prompt-injection scanning + source trust gating on both retrieved context and generated output), and tracked per-answer cost. This closes the loop opened in Phase 14 (LLMOps Core: prompts-as-artifacts, eval, observability) by tying every artifact dimension to a single auditable `RAGProvenanceRecord`.
+
+### Gate Checks (4)
+
+| Check | Validates |
+|---|---|
+| `provenance_complete` | Every record has all required identity fields (chunks, prompt/embedding/index/LLM versions) **and** guardrails were active |
+| `eval_threshold` | Every record's `eval_score >= min_eval_score` (default 0.7) |
+| `guardrails_active` | Every record has `guardrails_active == True` |
+| `cost_tracked` | Every record has `cost_usd > 0` — cost is actually measured, not defaulted to zero |
+
+### Dry Run
+
+```bash
+uv run python -c "from llm.milestone3_gate import Milestone3Gate; g=Milestone3Gate.dry_run(); print(g.summary())"
+# {'gateStatus': 'PASSED', 'checks': [...4 checks, all passed...], 'total_records': 3}
+```
+
+**Milestone 3 (Production RAG / LLMOps) is complete.** Phases 13–15 (Scaling & Inference Optimization, LLMOps Core, RAG Production Operations) together deliver: distributed/quantized/compiled LLM serving on vLLM+K8s; prompt-as-artifact versioning with eval-gated promotion; RAGAS-based RAG eval; LLM gateway cost governance; and now full RAG provenance with index versioning, hybrid retrieval, multi-tenant security, lifecycle management, failure taxonomy, and guardrails — closed by the Milestone 3 Gate.
 
 ---
 
