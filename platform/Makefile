@@ -20,6 +20,7 @@ SEED = 42
         gitops-gate-check \
         milestone2-gate-check \
         phase13-gate-check \
+        phase14-gate-check \
         kind-up kind-down
 
 define PYBLOCK_01
@@ -842,6 +843,12 @@ phase13-gate-check:
 	@uv run python -c "from llm.vllm_k8s import CapacityPlan; p=CapacityPlan(target_rps=100.0, single_replica_throughput=20.0, safety_factor=1.2, gpu_cost_per_hour=3.0); print('  ✅ CapacityPlan: {} replicas, USD{:.2f}/hr'.format(p.replicas_needed(), p.hourly_cost_usd()))"
 	@echo ""
 	@echo "  Phase 13 Gate: PASSED ✅"
+
+# ── Phase 14 Gate — LLMOps Core ───────────────────────────────────────────────
+
+phase14-gate-check:
+	@echo "Phase 14 Gate Check — LLMOps Core"
+	@uv run python -m pytest tests/unit/test_llmops_core.py tests/unit/test_llm_serving.py tests/unit/test_prompt_registry.py tests/unit/test_llm_eval.py tests/unit/test_ragas_eval.py tests/unit/test_finetuning_ops.py tests/unit/test_llm_observability.py tests/unit/test_llm_monitoring.py tests/unit/test_llm_gateway.py --override-ini="addopts=" -q && echo "  ✅ All Phase 14 tests passing" || echo "  ❌ Tests FAILED"
 
 # ── Internal ─────────────────────────────────────────────────────────────────
 

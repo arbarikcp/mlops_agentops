@@ -1129,22 +1129,44 @@ make phase13-gate-check
 
 ---
 
-## Phase 14 — LLMOps Core (Days 100–108)
-**Tag:** `phase14` *(pending)*
+## Phase 14 — LLMOps Core (Days 100–108) ✅
+**Tag:** `phase14`
+**Milestone:** 3 — Production RAG / LLMOps
+**Gate:** `make phase14-gate-check`
 
 ### Day Table
 
-| Day | Title | Theory | Deliverable | Status |
+| Day | Title | Code Module | Tests | Status |
 |---|---|---|---|---|
-| 100 | LLMOps vs MLOps | [day100_llmops_vs_mlops.md](docs/phase14/day100_llmops_vs_mlops.md) | Prompts-as-artifacts, non-determinism handling, cost-as-metric patterns | ☐ |
-| 101 | Serving LLMs on K8s | [day101_llm_serving.md](docs/phase14/day101_llm_serving.md) | `infra/k8s/kserve-llm.yaml` — KServe LLMInferenceService / Ray Serve | ☐ |
-| 102 | Prompt Management & Versioning | [day102_prompt_management.md](docs/phase14/day102_prompt_management.md) | `llm/prompt_registry.py` — prompts-as-code, versioned registry, A/B config | ☐ |
-| 103 | LLM Eval I — Offline | [day103_llm_eval_offline.md](docs/phase14/day103_llm_eval_offline.md) | `llm/eval_offline.py` — reference-based / free / LLM-as-judge eval harness | ☐ |
-| 104 | LLM Eval II — RAGAS | [day104_ragas.md](docs/phase14/day104_ragas.md) | `llm/eval_ragas.py` — faithfulness, context relevance, answer correctness | ☐ |
-| 105 | Fine-Tuning Ops | [day105_finetuning_ops.md](docs/phase14/day105_finetuning_ops.md) | `llm/finetune.py` — LoRA/QLoRA pipeline, dataset versioning, eval-gated gate | ☐ |
-| 106 | LLM Observability | [day106_llm_observability.md](docs/phase14/day106_llm_observability.md) | `llm/otel_tracer.py` — OTel GenAI trace: reasoning→tool→guardrail→response | ☐ |
-| 107 | LLM Monitoring in Prod | [day107_llm_monitoring.md](docs/phase14/day107_llm_monitoring.md) | `llm/quality_monitor.py` — hallucination drift, online eval on sampled traffic | ☐ |
-| 108 | LLM Gateway Architecture | [day108_llm_gateway.md](docs/phase14/day108_llm_gateway.md) | `llm/gateway.py` — model routing, quota enforcement, semantic caching | ☐ |
+| 100 | LLMOps vs MLOps | [llm/llmops_core.py](platform/llm/llmops_core.py) | [test_llmops_core.py](platform/tests/unit/test_llmops_core.py) | ✅ |
+| 101 | Serving LLMs: KServe LLMInferenceService / Ray Serve | [llm/llm_serving.py](platform/llm/llm_serving.py) | [test_llm_serving.py](platform/tests/unit/test_llm_serving.py) | ✅ |
+| 102 | Prompt Management & Versioning | [llm/prompt_registry.py](platform/llm/prompt_registry.py) | [test_prompt_registry.py](platform/tests/unit/test_prompt_registry.py) | ✅ |
+| 103 | LLM Eval I — Offline, Reference-Based/Free, LLM-as-Judge | [llm/llm_eval.py](platform/llm/llm_eval.py) | [test_llm_eval.py](platform/tests/unit/test_llm_eval.py) | ✅ |
+| 104 | LLM Eval II — RAGAS (Faithfulness, Context Relevance, Correctness) | [llm/ragas_eval.py](platform/llm/ragas_eval.py) | [test_ragas_eval.py](platform/tests/unit/test_ragas_eval.py) | ✅ |
+| 105 | Fine-Tuning Ops: LoRA/QLoRA, Dataset Versioning, Eval-Gated Promotion | [llm/finetuning_ops.py](platform/llm/finetuning_ops.py) | [test_finetuning_ops.py](platform/tests/unit/test_finetuning_ops.py) | ✅ |
+| 106 | LLM Observability: OTel GenAI, Langfuse/Phoenix/LangSmith | [llm/llm_observability.py](platform/llm/llm_observability.py) | [test_llm_observability.py](platform/tests/unit/test_llm_observability.py) | ✅ |
+| 107 | LLM Monitoring in Prod: Quality/Hallucination Drift, Online Eval | [llm/llm_monitoring.py](platform/llm/llm_monitoring.py) | [test_llm_monitoring.py](platform/tests/unit/test_llm_monitoring.py) | ✅ |
+| 108 | LLM Gateway Architecture: Routing, Quota, Semantic Cache, Cost Gov | [llm/llm_gateway.py](platform/llm/llm_gateway.py) | [test_llm_gateway.py](platform/tests/unit/test_llm_gateway.py) | ✅ |
+
+### Key Concepts
+- **Prompts-as-artifacts:** `PromptArtifact.content_hash` (sha256[:12]) versions prompts exactly like model checksums
+- **Non-determinism tracking:** `is_deterministic()` requires BOTH `temperature == 0` AND a `seed` — temperature alone is insufficient
+- **Cost-as-metric:** `CostMetric.total_cost_usd()` logged per-request, alongside latency, not sampled after the fact
+- **KServe LLMInferenceService vs Ray Serve:** CRD for single-model K8s-native autoscaling vs composable graph for custom routing
+- **Deterministic A/B bucketing:** `hash(request_id) % 100` gives sticky per-user variant assignment for prompt experiments
+- **RAGAS failure taxonomy:** separates hallucination (faithfulness < 0.7), poor retrieval (context relevance < 0.5), wrong answer (correctness < 0.6)
+- **QLoRA:** LoRA + 4-bit NF4 quantized frozen base — fine-tune 70B on a single 24GB GPU
+- **Eval-gated promotion:** `should_promote()` requires improvement >= configurable tolerance, not just improvement > 0
+- **OTel GenAI conventions:** `gen_ai.*` dotted span attributes make traces portable across Langfuse/Phoenix/LangSmith
+- **Hallucination drift:** two-stage gate — `has_drifted()` AND `drift_magnitude() > alert_threshold` — reduces alert noise
+- **LLM gateway:** `ModelRouter.route()` always escalates to the cheapest model tier that still fits the complexity ceiling
+
+### Test Summary
+**208 tests, 0 failures** across all 9 modules.
+
+```bash
+make phase14-gate-check
+```
 
 ---
 
